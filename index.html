@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Aadhaar OCR with Form Autofill</title>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js'></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+        
+        .panel {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .panel h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f8f9ff;
+        }
+        
+        .upload-area.dragover {
+            background: #e8ebff;
+            border-color: #764ba2;
+        }
+        
+        #imagePreview {
+            max-width: 100%;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+            margin: 20px 0;
+        }
+        
+        #selectionCanvas {
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            cursor: crosshair;
+            display: none;
+            max-width: 100%;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .field-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border 0.3s;
+        }
+        
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .form-url-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 968px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Enhanced Aadhaar OCR Scanner</h1>
+            <p>Improved Detection with Google Form Autofill</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="panel">
+                <h2>📤 Upload & Scan</h2>
+                
+                <div class="upload-area" id="uploadArea">
+                    <p style="font-size: 3em; margin-bottom: 10px;">📁</p>
+                    <p style="font-size: 1.2em; margin-bottom: 10px;">Drop Aadhaar image here or click to browse</p>
+                    <p style="color: #6c757d;">Supports JPG, PNG formats</p>
+                    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                </div>
+                
+                <img id="imagePreview" alt="Preview">
+                
+                <div class="canvas-container">
+                    <canvas id="selectionCanvas"></canvas>
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn-primary" id="selectIdentityBtn" disabled>Select Identity Block</button>
+                    <button class="btn-primary" id="selectAddressBtn" disabled>Select Address Block</button>
+                    <button class="btn-secondary" id="resetBtn" disabled>Reset Selection</button>
+                </div>
+                
+                <div class="progress-bar" id="progressBar">
+                    <div class="progress-fill" id="progressFill">0%</div>
+                </div>
+                
+                <div class="status" id="status"></div>
+            </div>
+            
+            <div class="panel">
+                <h2>📋 Extracted Information</h2>
+                
+                <div class="field-group">
+                    <label>Name</label>
+                    <input type="text" id="name" placeholder="Full Name">
+                </div>
+                
+                <div class="field-group">
+                    <label>Date of Birth / Age</label>
+                    <input type="text" id="dob" placeholder="DD/MM/YYYY or Age">
+                </div>
+                
+                <div class="field-group">
+                    <label>Gender</label>
+                    <input type="text" id="gender" placeholder="Male/Female">
+                </div>
+                
+                <div class="field-group">
+                    <label>House Name/Number</label>
+                    <input type="text" id="house" placeholder="House Name or Number">
+                </div>
+                
+                <div class="field-group">
+                    <label>Road/Street</label>
+                    <input type="text" id="road" placeholder="Road or Street Name">
+                </div>
+                
+                <div class="field-group">
+                    <label>Town/City</label>
+                    <input type="text" id="town" placeholder="Town or City">
+                </div>
+                
+                <div class="field-group">
+                    <label>PIN Code</label>
+                    <input type="text" id="pincode" placeholder="6-digit PIN">
+                </div>
+                
+                <div class="field-group">
+                    <label>Mobile Number</label>
+                    <input type="text" id="mobile" placeholder="10-digit Mobile">
+                </div>
+                
+                <div class="form-url-section">
+                    <h3 style="margin-bottom: 15px; color: #667eea;">Google Form Setup</h3>
+                    <div class="field-group">
+                        <label>Google Form URL</label>
+                        <input type="text" id="formUrl" placeholder="https://docs.google.com/forms/d/e/...">
+                    </div>
+                    <p style="color: #6c757d; font-size: 0.9em; margin-bottom: 15px;">
+                        Enter your form URL with proper entry IDs configured in the code
+                    </p>
+                    <button class="btn-success" id="fillFormBtn">Fill Google Form</button>
+                </div>
+                
+                <div class="btn-group" style="margin-top: 20px;">
+                    <button class="btn-secondary" id="copyBtn">Copy All Data</button>
+                    <button class="btn-secondary" id="clearBtn">Clear Fields</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let img = new Image();
+        let canvas = document.getElementById('selectionCanvas');
+        let ctx = canvas.getContext('2d');
+        let isSelecting = false;
+        let startX, startY, endX, endY;
+        let selectionMode = null;
+        
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const selectIdentityBtn = document.getElementById('selectIdentityBtn');
+        const selectAddressBtn = document.getElementById('selectAddressBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const status = document.getElementById('status');
+        
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                loadImage(file);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                loadImage(file);
+            }
+        });
+        
+        function loadImage(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                img.src = e.target.result;
+                img.onload = () => {
+                    imagePreview.src = e.target.result;
+                    imagePreview.style.display = 'block';
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    canvas.style.display = 'block';
+                    ctx.drawImage(img, 0, 0);
+                    selectIdentityBtn.disabled = false;
+                    selectAddressBtn.disabled = false;
+                    resetBtn.disabled = false;
+                    showStatus('Image loaded successfully! Select a region to scan.', 'success');
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        selectIdentityBtn.addEventListener('click', () => {
+            selectionMode = 'identity';
+            showStatus('Click and drag to select the Identity block (Name, DOB, Gender, Aadhaar Number)', 'info');
+        });
+        
+        selectAddressBtn.addEventListener('click', () => {
+            selectionMode = 'address';
+            showStatus('Click and drag to select the Address block', 'info');
+        });
+        
+        resetBtn.addEventListener('click', () => {
+            ctx.drawImage(img, 0, 0);
+            selectionMode = null;
+            showStatus('Selection reset. Choose a block to scan.', 'info');
+        });
+        
+        canvas.addEventListener('mousedown', (e) => {
+            if (!selectionMode) return;
+            isSelecting = true;
+            const rect = canvas.getBoundingClientRect();
+            startX = (e.clientX - rect.left) * (canvas.width / rect.width);
+            startY = (e.clientY - rect.top) * (canvas.height / rect.height);
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isSelecting) return;
+            const rect = canvas.getBoundingClientRect();
+            endX = (e.clientX - rect.left) * (canvas.width / rect.width);
+            endY = (e.clientY - rect.top) * (canvas.height / rect.height);
+            
+            ctx.drawImage(img, 0, 0);
+            ctx.strokeStyle = selectionMode === 'identity' ? '#667eea' : '#28a745';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+            ctx.fillStyle = selectionMode === 'identity' ? 'rgba(102, 126, 234, 0.1)' : 'rgba(40, 167, 69, 0.1)';
+            ctx.fillRect(startX, startY, endX - startX, endY - startY);
+        });
+        
+        canvas.addEventListener('mouseup', async () => {
+            if (!isSelecting) return;
+            isSelecting = false;
+            
+            const x = Math.min(startX, endX);
+            const y = Math.min(startY, endY);
+            const w = Math.abs(endX - startX);
+            const h = Math.abs(endY - startY);
+            
+            if (w < 10 || h < 10) {
+                showStatus('Selection too small. Please select a larger area.', 'error');
+                return;
+            }
+            
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = w;
+            tempCanvas.height = h;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(img, x, y, w, h, 0, 0, w, h);
+            
+            await performOCR(tempCanvas, selectionMode);
+        });
+        
+        async function performOCR(canvas, mode) {
+            progressBar.style.display = 'block';
+            showStatus(`Processing ${mode} block...`, 'info');
+            
+            try {
+                const worker = await Tesseract.createWorker('eng', 1, {
+                    logger: (m) => {
+                        if (m.status === 'recognizing text') {
+                            const progress = Math.round(m.progress * 100);
+                            progressFill.style.width = progress + '%';
+                            progressFill.textContent = progress + '%';
+                        }
+                    }
+                });
+                
+                await worker.setParameters({
+                    tessedit_char_whitelist: mode === 'identity' ? 
+                        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ./:-' :
+                        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,/:-',
+                    tessedit_pageseg_mode: Tesseract.PSM.AUTO,
+                    preserve_interword_spaces: '1',
+                });
+                
+                const { data: { text } } = await worker.recognize(canvas);
+                await worker.terminate();
+                
+                parseAndFillData(text, mode);
+                progressBar.style.display = 'none';
+                showStatus(`${mode.charAt(0).toUpperCase() + mode.slice(1)} block processed successfully!`, 'success');
+            } catch (error) {
+                progressBar.style.display = 'none';
+                showStatus('OCR Error: ' + error.message, 'error');
+            }
+        }
+        
+        function parseAndFillData(text, mode) {
+            // Remove all non-English characters (keep only English letters, numbers, spaces, and common punctuation)
+            const cleanText = text.replace(/[^\x00-\x7F]/g, ' ');
+            const lines = cleanText.split('\n').map(l => l.trim()).filter(l => l);
+            
+            if (mode === 'identity') {
+                // Filter out lines containing father/mother/spouse indicators
+                const filteredIdentityLines = lines.filter(l => 
+                    !l.match(/\b(father|mother|spouse|husband|wife|guardian|parent|son|daughter)\b/i) &&
+                    !l.match(/\/O/i) &&
+                    !l.match(/\d{4}\s?\d{4}\s?\d{4}/) && // No Aadhaar numbers
+                    !l.includes('Government') && 
+                    !l.includes('India')
+                );
+                
+                // Extract DOB or Year - look for patterns
+                const dobMatch = cleanText.match(/(?:DOB|Birth|YOB)[:\s]*(\d{2}\/\d{2}\/\d{4}|\d{4})/i);
+                if (dobMatch) {
+                    document.getElementById('dob').value = dobMatch[1];
+                } else {
+                    const yearMatch = cleanText.match(/\b(19|20)\d{2}\b/);
+                    if (yearMatch) {
+                        const year = parseInt(yearMatch[0]);
+                        const age = new Date().getFullYear() - year;
+                        document.getElementById('dob').value = `${age} years (Born ${year})`;
+                    }
+                }
+                
+                // Extract Gender
+                const genderMatch = cleanText.match(/\b(Male|Female|MALE|FEMALE)\b/i);
+                if (genderMatch) {
+                    const gender = genderMatch[1].toLowerCase();
+                    document.getElementById('gender').value = gender.charAt(0).toUpperCase() + gender.slice(1);
+                }
+                
+                // Extract Name - should be the first proper name line
+                // Name is typically at the top, proper case, no numbers
+                const nameLine = filteredIdentityLines.find(l => 
+                    l.length > 3 && 
+                    /^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/.test(l) &&
+                    !l.match(/\d/) // No digits in name
+                );
+                if (nameLine) {
+                    document.getElementById('name').value = nameLine;
+                }
+            } else if (mode === 'address') {
+                // Remove father/mother/spouse lines from address too
+                const filteredAddressLines = lines.filter(l => 
+                    !l.match(/\b(father|mother|spouse|husband|wife|guardian|parent|son|daughter)\b/i) &&
+                    !l.match(/\d{4}\s?\d{4}\s?\d{4}/) && // No Aadhaar
+                    !l.match(/\/O/i) && // No S/O, D/O, W/O, C/O patterns
+                    l.length > 2 &&
+                    !l.match(/^(Male|Female|DOB|YOB)$/i)
+                );
+                
+                // Extract mobile number (10 digits starting with 6-9)
+                const mobileMatch = cleanText.match(/\b[6-9]\d{9}\b/);
+                if (mobileMatch) {
+                    document.getElementById('mobile').value = mobileMatch[0];
+                }
+                
+                // Extract PIN code (6 digits)
+                const pinMatch = cleanText.match(/\b\d{6}\b/);
+                if (pinMatch) {
+                    document.getElementById('pincode').value = pinMatch[0];
+                }
+                
+                // Address is CSV-like, separated by commas
+                // Join all filtered lines and split by comma
+                const fullAddress = filteredAddressLines.join(' ');
+                const addressParts = fullAddress.split(',')
+                    .map(p => p.trim())
+                    .filter(p => 
+                        p.length > 2 &&
+                        !p.match(/\b[6-9]\d{9}\b/) && // Exclude mobile
+                        !p.match(/\b\d{6}\b/) // Exclude PIN
+                    );
+                
+                // Parse address components
+                if (addressParts.length > 0) {
+                    // First part is house name/number
+                    document.getElementById('house').value = addressParts[0] || '';
+                    
+                    // Second part is typically road/street
+                    if (addressParts[1]) {
+                        document.getElementById('road').value = addressParts[1];
+                    }
+                    
+                    // Last part before PIN is typically town/city
+                    if (addressParts.length > 2) {
+                        document.getElementById('town').value = addressParts[addressParts.length - 1];
+                    }
+                }
+            }
+        }
+        
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = 'status ' + type;
+            status.style.display = 'block';
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+        
+        document.getElementById('copyBtn').addEventListener('click', () => {
+            const data = {
+                'Name': document.getElementById('name').value,
+                'Date of Birth': document.getElementById('dob').value,
+                'Gender': document.getElementById('gender').value,
+                'House': document.getElementById('house').value,
+                'Road': document.getElementById('road').value,
+                'Town': document.getElementById('town').value,
+                'PIN Code': document.getElementById('pincode').value,
+                'Mobile': document.getElementById('mobile').value
+            };
+            
+            const text = Object.entries(data)
+                .filter(([_, v]) => v)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join('\n');
+            
+            navigator.clipboard.writeText(text).then(() => {
+                showStatus('Data copied to clipboard!', 'success');
+            });
+        });
+        
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.getElementById('name').value = '';
+            document.getElementById('dob').value = '';
+            document.getElementById('gender').value = '';
+            document.getElementById('house').value = '';
+            document.getElementById('road').value = '';
+            document.getElementById('town').value = '';
+            document.getElementById('pincode').value = '';
+            document.getElementById('mobile').value = '';
+            showStatus('All fields cleared.', 'info');
+        });
+        
+        document.getElementById('fillFormBtn').addEventListener('click', () => {
+            const formUrl = document.getElementById('formUrl').value;
+            if (!formUrl) {
+                showStatus('Please enter a Google Form URL first.', 'error');
+                return;
+            }
+            
+            const data = {
+                name: document.getElementById('name').value,
+                dob: document.getElementById('dob').value,
+                gender: document.getElementById('gender').value,
+                house: document.getElementById('house').value,
+                road: document.getElementById('road').value,
+                town: document.getElementById('town').value,
+                pincode: document.getElementById('pincode').value,
+                mobile: document.getElementById('mobile').value
+            };
+            
+            const baseUrl = formUrl.split('?')[0].replace('/viewform', '/formResponse');
+            
+            // Update these entry IDs to match your Google Form
+            const params = new URLSearchParams();
+            params.append('entry.1234567890', data.name); // Name field
+            params.append('entry.1234567891', data.dob); // DOB field
+            params.append('entry.1234567892', data.gender); // Gender field
+            params.append('entry.1234567893', data.house); // House field
+            params.append('entry.1234567894', data.road); // Road field
+            params.append('entry.1234567895', data.town); // Town field
+            params.append('entry.1234567896', data.pincode); // PIN field
+            params.append('entry.1234567897', data.mobile); // Mobile field
+            
+            const fillUrl = `${baseUrl}?${params.toString()}`;
+            
+            showStatus('Opening form with pre-filled data. Update entry IDs in code to match your form.', 'info');
+            window.open(fillUrl, '_blank');
+        });
+    </script>
+</body>
+</html>
