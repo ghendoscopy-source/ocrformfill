@@ -796,33 +796,80 @@ const csvTokens = addressLines
 
                 /* ---------- House & Road (strictly positional) ---------- */
 
-                document.getElementById('house').value = addressLines[0] || '';
-                document.getElementById('road').value  = addressLines[1] || '';
+             /* ---------- House & Road (CSV-aware, rules-based) ---------- */
 
-                /* ---------- Town deduction ---------- */
+// CSV tokenization (order preserved)
+const csvParts = addressLines
+    .flatMap(line => line.split(','))
+    .map(p => p.trim())
+    .filter(Boolean);
 
-                let town = '';
+// ----- HOUSE & ROAD -----
+let house = '';
+let road = '';
+let roadConfirmed = false;
 
-                // Highest confidence: PO present
-                const poLine = addressLines.find(l => poRegex.test(l));
-                if (poLine) {
-                    town = poLine.replace(poRegex, '').trim();
-                }
+let idx = 0;
+let skipped = 0;
 
-                // Fallback: up to 3 English lines before PIN
-                if (!town) {
-                    const pinLineIndex = addressLines.findIndex(l => pinRegex.test(l));
+// Ignore up to 3 leading junk tokens
+while (
+    idx < csvParts.length &&
+    skipped < 3 &&
+    (
+        /^address:?$/i.test(csvParts[idx]) ||
+        /^to$/i.test(csvParts[idx]) ||
+        careOfRegex.test(csvParts[idx])
+    )
+) {
+    idx++;
+    skipped++;
+}
 
-                    if (pinLineIndex > 0) {
-                        town = addressLines
-                            .slice(Math.max(0, pinLineIndex - 3), pinLineIndex)
-                            .filter(l =>
-                                !adminNoiseRegex.test(l) &&
-                                !mobileRegex.test(l)
-                            )
-                            .join(' ');
-                    }
-                }
+// First valid token is HOUSE
+if (idx < csvParts.length) {
+    house = csvParts[idx];
+    idx++;
+}
+
+// Next token is ROAD
+if (idx < csvParts.length) {
+    road = csvParts[idx];
+
+    // Positive confirmation only (no logic change)
+    if (/\b(road|rd|street|st|lane|ln|avenue|ave)\b/i.test(road)) {
+        roadConfirmed = true;
+    }
+}
+
+document.getElementById('house').value = house || '';
+document.getElementById('road').value  = road || '';
+
+/* ---------- Town deduction ---------- */
+
+let town = '';
+
+// Highest confidence: PO present (NO CLEANING)
+const poPart = csvParts.find(p => poRegex.test(p));
+if (poPart) {
+    town = poPart.trim();
+}
+
+// Fallback: up to 3 CSV parts before PIN
+if (!town) {
+    const pinIndex = csvParts.findIndex(p => pinRegex.test(p));
+
+    if (pinIndex > 0) {
+        town = csvParts
+            .slice(Math.max(0, pinIndex - 3), pinIndex)
+            .map(p => p.replace(adminNoiseRegex, '').trim())
+            .filter(Boolean)
+            .join(' ');
+    }
+}
+
+document.getElementById('town').value = town || '';
+
 
                 document.getElementById('town').value = town.trim();
             }
