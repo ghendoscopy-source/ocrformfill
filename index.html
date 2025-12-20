@@ -101,17 +101,28 @@
         
         .canvas-container {
             width: 100%;
-            text-align: center;
+            height: 400px;
             margin: 20px 0;
+            overflow: scroll;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            background: #f8f9fa;
+            position: relative;
+            -webkit-overflow-scrolling: touch;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .canvas-wrapper {
+            transform-origin: center center;
+            transition: transform 0.1s ease-out;
         }
         
         #selectionCanvas {
-            border: 2px solid #667eea;
-            border-radius: 10px;
+            border: none;
             cursor: crosshair;
             display: none;
-            max-width: 100%;
-            height: auto;
         }
         
         .btn-group {
@@ -273,8 +284,18 @@
                 <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
                 <input type="file" id="fileInput" accept="image/*" style="display: none;">
                 
-                <div class="canvas-container">
-                    <canvas id="selectionCanvas"></canvas>
+                <div class="canvas-container" id="canvasContainer">
+                    <div class="canvas-wrapper" id="canvasWrapper">
+                        <canvas id="selectionCanvas"></canvas>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; color: #6c757d; font-size: 0.9em; margin: 10px 0;">
+                    💡 Pinch to zoom • Drag with 2 fingers to pan
+                </div>
+                
+                <div style="text-align: center; margin: 10px 0;">
+                    <button class="btn-secondary" id="zoomResetBtn" style="display: none;">Reset Zoom (1x)</button>
                 </div>
                 
                 <div class="btn-group">
@@ -343,7 +364,7 @@
                     </p>
                     <div class="field-group">
                         <label>Pre-filled Form Link (paste once and save)</label>
-                        <input type="text" id="formUrl"https://docs.google.com/forms/d/e/1FAIpQLSdzmqfByBiXII5NDK8wwBFMgcJyCuY9lgzpTcLqiAoPne9BMQ/viewform?usp=pp_url&entry.1243218095=test&entry.357845090=2011-01-01&entry.367282175=Male&entry.294542757=test&entry.2090591826=GH+road&entry.773748203=Kochi&entry.1489632830=682011&entry.1800764683=8400334118">
+                        <input type="text" id="formUrl" placeholder="https://docs.google.com/forms/d/e/.../viewform?entry.123=...&entry.456=...">
                     </div>
                     <div class="btn-group" style="margin-top: 15px;">
                         <button class="btn-success" id="fillFormBtn">Open Form with Scanned Data</button>
@@ -363,9 +384,16 @@
         let img = new Image();
         let canvas = document.getElementById('selectionCanvas');
         let ctx = canvas.getContext('2d');
+        let canvasContainer = document.getElementById('canvasContainer');
+        let canvasWrapper = document.getElementById('canvasWrapper');
         let isSelecting = false;
         let startX, startY, endX, endY;
         let selectionMode = null;
+        
+        // Zoom variables
+        let currentScale = 1;
+        let initialDistance = 0;
+        let isPanning = false;
         
         const cameraInput = document.getElementById('cameraInput');
         const fileInput = document.getElementById('fileInput');
@@ -374,6 +402,7 @@
         const selectIdentityBtn = document.getElementById('selectIdentityBtn');
         const selectAddressBtn = document.getElementById('selectAddressBtn');
         const resetBtn = document.getElementById('resetBtn');
+        const zoomResetBtn = document.getElementById('zoomResetBtn');
         const progressBar = document.getElementById('progressBar');
         const progressFill = document.getElementById('progressFill');
         const status = document.getElementById('status');
@@ -400,14 +429,32 @@
             reader.onload = (e) => {
                 img.src = e.target.result;
                 img.onload = () => {
+                    // Set canvas to actual image size
                     canvas.width = img.width;
                     canvas.height = img.height;
-                    canvas.style.display = 'block';
                     ctx.drawImage(img, 0, 0);
+                    
+                    // Calculate scale to fit entire image in container
+                    const containerWidth = canvasContainer.clientWidth - 40;
+                    const containerHeight = canvasContainer.clientHeight - 40;
+                    const scaleW = containerWidth / img.width;
+                    const scaleH = containerHeight / img.height;
+                    const fitScale = Math.min(scaleW, scaleH, 1); // Don't scale up, only down if needed
+                    
+                    // Set canvas display size to fit in container
+                    canvas.style.width = (img.width * fitScale) + 'px';
+                    canvas.style.height = (img.height * fitScale) + 'px';
+                    canvas.style.display = 'block';
+                    
+                    // Reset zoom
+                    currentScale = 1;
+                    canvasWrapper.style.transform = `scale(${currentScale})`;
+                    
                     selectIdentityBtn.disabled = false;
                     selectAddressBtn.disabled = false;
                     resetBtn.disabled = false;
-                    showStatus('Image loaded successfully! Select a region to scan.', 'success');
+                    zoomResetBtn.style.display = 'inline-block';
+                    showStatus('Image loaded! Pinch to zoom for precise selection.', 'success');
                 };
             };
             reader.readAsDataURL(file);
@@ -427,6 +474,14 @@
             ctx.drawImage(img, 0, 0);
             selectionMode = null;
             showStatus('Selection reset. Choose a block to scan.', 'info');
+        });
+        
+        zoomResetBtn.addEventListener('click', () => {
+            currentScale = 1;
+            canvasWrapper.style.transform = `scale(${currentScale})`;
+            canvasContainer.scrollLeft = 0;
+            canvasContainer.scrollTop = 0;
+            showStatus('Zoom reset to 1x', 'info');
         });
         
         canvas.addEventListener('mousedown', (e) => {
@@ -479,36 +534,75 @@
         });
         
         canvas.addEventListener('touchstart', (e) => {
-            if (!selectionMode) return;
-            e.preventDefault();
-            isSelecting = true;
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const touch = e.touches[0];
-            startX = (touch.clientX - rect.left) * scaleX;
-            startY = (touch.clientY - rect.top) * scaleY;
+            if (e.touches.length === 2) {
+                // Two finger pinch/pan
+                isPanning = true;
+                isSelecting = false;
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                initialDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                e.preventDefault();
+            } else if (e.touches.length === 1 && selectionMode && !isPanning) {
+                // Single finger selection
+                isSelecting = true;
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                startX = (touch.clientX - rect.left) * (canvas.width / rect.width);
+                startY = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                e.preventDefault();
+            }
         });
         
         canvas.addEventListener('touchmove', (e) => {
-            if (!isSelecting) return;
-            e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const touch = e.touches[0];
-            endX = (touch.clientX - rect.left) * scaleX;
-            endY = (touch.clientY - rect.top) * scaleY;
-            
-            ctx.drawImage(img, 0, 0);
-            ctx.strokeStyle = selectionMode === 'identity' ? '#667eea' : '#28a745';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(startX, startY, endX - startX, endY - startY);
-            ctx.fillStyle = selectionMode === 'identity' ? 'rgba(102, 126, 234, 0.1)' : 'rgba(40, 167, 69, 0.1)';
-            ctx.fillRect(startX, startY, endX - startX, endY - startY);
+            if (e.touches.length === 2 && isPanning) {
+                // Pinch zoom
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const currentDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                
+                if (initialDistance > 0) {
+                    const scaleChange = currentDistance / initialDistance;
+                    const newScale = Math.max(1, Math.min(3, currentScale * scaleChange));
+                    
+                    if (newScale !== currentScale) {
+                        currentScale = newScale;
+                        canvasWrapper.style.transform = `scale(${currentScale})`;
+                    }
+                    
+                    initialDistance = currentDistance;
+                }
+                e.preventDefault();
+            } else if (isSelecting && !isPanning) {
+                // Draw selection rectangle
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                endX = (touch.clientX - rect.left) * (canvas.width / rect.width);
+                endY = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                
+                ctx.drawImage(img, 0, 0);
+                ctx.strokeStyle = selectionMode === 'identity' ? '#667eea' : '#28a745';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+                ctx.fillStyle = selectionMode === 'identity' ? 'rgba(102, 126, 234, 0.1)' : 'rgba(40, 167, 69, 0.1)';
+                ctx.fillRect(startX, startY, endX - startX, endY - startY);
+                e.preventDefault();
+            }
         });
         
         canvas.addEventListener('touchend', async (e) => {
+            if (isPanning) {
+                isPanning = false;
+                initialDistance = 0;
+                e.preventDefault();
+                return;
+            }
+            
             if (!isSelecting) return;
             e.preventDefault();
             isSelecting = false;
@@ -580,44 +674,44 @@
                     !l.includes('India')
                 );
                 
-                // ---- DOB extraction: FULL DATE ONLY ----
-let dob = '';
+                // ---- DOB extraction: FULL DATE ONLY (YYYY-MM-DD format for Google Forms) ----
+                let dob = '';
 
-// DD/MM/YYYY or DD-MM-YYYY
-let m = cleanText.match(/\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/);
-if (m) {
-    dob = `${m[3]}-${m[2]}-${m[1]}`;
-}
+                // DD/MM/YYYY or DD-MM-YYYY
+                let m = cleanText.match(/\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/);
+                if (m) {
+                    dob = `${m[3]}-${m[2]}-${m[1]}`;
+                }
 
-// YYYY/MM/DD or YYYY-MM-DD
-if (!dob) {
-    m = cleanText.match(/\b(\d{4})[\/\-](\d{2})[\/\-](\d{2})\b/);
-    if (m) {
-        dob = `${m[1]}-${m[2]}-${m[3]}`;
-    }
-}
+                // YYYY/MM/DD or YYYY-MM-DD
+                if (!dob) {
+                    m = cleanText.match(/\b(\d{4})[\/\-](\d{2})[\/\-](\d{2})\b/);
+                    if (m) {
+                        dob = `${m[1]}-${m[2]}-${m[3]}`;
+                    }
+                }
 
-// YYYYMMDD (no separators)
-if (!dob) {
-    m = cleanText.match(/\b(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/);
-    if (m) {
-        dob = `${m[0].slice(0,4)}-${m[0].slice(4,6)}-${m[0].slice(6,8)}`;
-    }
-}
+                // YYYYMMDD (no separators)
+                if (!dob) {
+                    m = cleanText.match(/\b(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/);
+                    if (m) {
+                        dob = `${m[0].slice(0,4)}-${m[0].slice(4,6)}-${m[0].slice(6,8)}`;
+                    }
+                }
 
-// Set DOB only if full date detected
-if (dob) {
-    document.getElementById('dob').value = dob;
-}
-
+                // Set DOB only if full date detected
+                if (dob) {
+                    document.getElementById('dob').value = dob;
                 }
                 
+                // Extract Gender
                 const genderMatch = cleanText.match(/\b(Male|Female|MALE|FEMALE)\b/i);
                 if (genderMatch) {
                     const gender = genderMatch[1].toLowerCase();
                     document.getElementById('gender').value = gender.charAt(0).toUpperCase() + gender.slice(1);
                 }
                 
+                // Extract Name
                 const nameLine = filteredIdentityLines.find(l => 
                     l.length > 3 && 
                     /^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/.test(l) &&
@@ -627,100 +721,81 @@ if (dob) {
                     document.getElementById('name').value = nameLine;
                 }
             } 
-            
             else if (mode === 'address') {
+                const rawLines = lines.map(l => l.trim()).filter(l => l.length > 0);
+                
+                const careOfRegex = /\b(C\/O|S\/O|D\/O|W\/O)\b/i;
+                const pinRegex = /\b\d{6}\b/;
+                const mobileRegex = /\b[6-9]\d{9}\b/;
+                const poRegex = /\b(P\.?O\.?|Post Office)\b/i;
+                const adminNoiseRegex = /\b(taluk|taluka|village|district|state)\b/i;
 
-    /* ---------- English-only lines (already enforced upstream) ---------- */
+                // Extract PIN & MOBILE
+                rawLines.forEach(l => {
+                    const pinMatch = l.match(pinRegex);
+                    if (pinMatch) {
+                        document.getElementById('pincode').value = pinMatch[0];
+                    }
 
-    const rawLines = lines
-        .map(l => l.trim())
-        .filter(l => l.length > 0);
+                    const mobileMatch = l.match(mobileRegex);
+                    if (mobileMatch) {
+                        document.getElementById('mobile').value = mobileMatch[0];
+                    }
+                });
 
-    const careOfRegex = /\b(C\/O|S\/O|D\/O|W\/O)\b/i;
-    const pinRegex = /\b\d{6}\b/;
-    const mobileRegex = /\b[6-9]\d{9}\b/;
-    const poRegex = /\b(P\.?O\.?|Post Office)\b/i;
-    const adminNoiseRegex = /\b(taluk|taluka|village|district|state)\b/i;
+                // Address start resolution
+                let startIndex = 0;
+                const coIndex = rawLines.findIndex(l => careOfRegex.test(l));
+                if (coIndex !== -1) {
+                    startIndex = coIndex + 1;
+                } else {
+                    const toIndex = rawLines.findIndex(l => /^To$/i.test(l));
+                    if (toIndex !== -1) {
+                        startIndex = toIndex + 2;
+                    } else {
+                        const addressIndex = rawLines.findIndex(l => /^Address$/i.test(l));
+                        if (addressIndex !== -1) {
+                            startIndex = addressIndex + 1;
+                        }
+                    }
+                }
 
-    /* ---------- PIN & MOBILE (anchors, anywhere in block) ---------- */
+                // Address body
+                const addressLines = rawLines
+                    .slice(startIndex)
+                    .filter(l =>
+                        !/^To$/i.test(l) &&
+                        !/^Address$/i.test(l) &&
+                        !careOfRegex.test(l)
+                    );
 
-    rawLines.forEach(l => {
-        const pinMatch = l.match(pinRegex);
-        if (pinMatch) {
-            document.getElementById('pincode').value = pinMatch[0];
-        }
+                // House & Road (positional)
+                document.getElementById('house').value = addressLines[0] || '';
+                document.getElementById('road').value = addressLines[1] || '';
 
-        const mobileMatch = l.match(mobileRegex);
-        if (mobileMatch) {
-            document.getElementById('mobile').value = mobileMatch[0];
-        }
-    });
+                // Town deduction
+                let town = '';
+                const poLine = addressLines.find(l => poRegex.test(l));
+                if (poLine) {
+                    town = poLine.replace(poRegex, '').trim();
+                }
 
-    /* ---------- ADDRESS START RESOLUTION (priority-based) ---------- */
+                if (!town) {
+                    const pinLineIndex = addressLines.findIndex(l => pinRegex.test(l));
+                    if (pinLineIndex > 0) {
+                        town = addressLines
+                            .slice(Math.max(0, pinLineIndex - 3), pinLineIndex)
+                            .filter(l =>
+                                !adminNoiseRegex.test(l) &&
+                                !mobileRegex.test(l)
+                            )
+                            .join(' ');
+                    }
+                }
 
-    let startIndex = 0;
-
-    // 1. Care Of (highest priority)
-    const coIndex = rawLines.findIndex(l => careOfRegex.test(l));
-    if (coIndex !== -1) {
-        startIndex = coIndex + 1;
-    } else {
-        // 2. To + Name
-        const toIndex = rawLines.findIndex(l => /^To$/i.test(l));
-        if (toIndex !== -1) {
-            startIndex = toIndex + 2;
-        } else {
-            // 3. Address header
-            const addressIndex = rawLines.findIndex(l => /^Address$/i.test(l));
-            if (addressIndex !== -1) {
-                startIndex = addressIndex + 1;
+                document.getElementById('town').value = town.trim();
             }
         }
-    }
-
-    /* ---------- Address body (preserve order) ---------- */
-
-    const addressLines = rawLines
-        .slice(startIndex)
-        .filter(l =>
-            !/^To$/i.test(l) &&
-            !/^Address$/i.test(l) &&
-            !careOfRegex.test(l)
-        );
-
-    /* ---------- House & Road (strictly positional) ---------- */
-
-    document.getElementById('house').value = addressLines[0] || '';
-    document.getElementById('road').value  = addressLines[1] || '';
-
-    /* ---------- Town deduction ---------- */
-
-    let town = '';
-
-    // Highest confidence: PO present
-    const poLine = addressLines.find(l => poRegex.test(l));
-    if (poLine) {
-        town = poLine.replace(poRegex, '').trim();
-    }
-
-    // Fallback: up to 3 English lines before PIN
-    if (!town) {
-        const pinLineIndex = addressLines.findIndex(l => pinRegex.test(l));
-
-        if (pinLineIndex > 0) {
-            town = addressLines
-                .slice(Math.max(0, pinLineIndex - 3), pinLineIndex)
-                .filter(l =>
-                    !adminNoiseRegex.test(l) &&
-                    !mobileRegex.test(l)
-                )
-                .join(' ');
-        }
-    }
-
-    document.getElementById('town').value = town.trim();
-            }
-}
         
         function showStatus(message, type) {
             status.textContent = message;
