@@ -793,12 +793,18 @@ const csvTokens = addressLines
                 /* ---------- House & Road (strictly positional) ---------- */
 
              /* ---------- House & Road (CSV-aware, rules-based) ---------- */
-
-// CSV tokenization (order preserved)
+                
+// CSV tokenization (order preserved, OCR-safe)
 const csvParts = addressLines
-    .flatMap(line => line.split(','))
+    .flatMap(line =>
+        line
+            // normalize OCR comma variants to standard comma
+            .replace(/[，﹐‚]/g, ',')
+            .split(',')
+    )
     .map(p => p.trim())
     .filter(Boolean);
+
 
 // ----- HOUSE & ROAD -----
 let house = '';
