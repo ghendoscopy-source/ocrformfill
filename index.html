@@ -722,159 +722,84 @@
                 }
             } 
             else if (mode === 'address') {
-                /* ---------- English-only lines (already enforced upstream) ---------- */
-                const rawLines = lines
-                    .map(l => l.trim())
-                    .filter(l => l.length > 0);
+                /* ---------- Address parsing (CSV-only, rule-pure) ---------- */
 
-                const careOfRegex = /\b(C\/O|S\/O|D\/O|W\/O)\b/i;
-                const pinRegex = /\b\d{6}\b/;
-                const mobileRegex = /\b[6-9]\d{9}\b/;
-                const poRegex = /\b(P\.?O\.?|Post Office)\b/i;
-                const adminNoiseRegex = /\b(taluk|taluka|village|district|state)\b/i;
-
-                /* ---------- PIN & MOBILE (anchors, anywhere in block) ---------- */
-
-                rawLines.forEach(l => {
-                    const pinMatch = l.match(pinRegex);
-                    if (pinMatch) {
-                        document.getElementById('pincode').value = pinMatch[0];
-                    }
-
-                    const mobileMatch = l.match(mobileRegex);
-                    if (mobileMatch) {
-                        document.getElementById('mobile').value = mobileMatch[0];
-                    }
-                });
-                
-                // If no mobile found, set placeholder for nurse to update
-                if (!document.getElementById('mobile').value) {
-                    document.getElementById('mobile').value = '9999999999';
-                }
-
-                /* ---------- ADDRESS START RESOLUTION (priority-based) ---------- */
-
-                let startIndex = 0;
-
-                // 1. Care Of (highest priority)
-                const coIndex = rawLines.findIndex(l => careOfRegex.test(l));
-                if (coIndex !== -1) {
-                    startIndex = coIndex + 1;
-                } else {
-                    // 2. To + Name
-                    const toIndex = rawLines.findIndex(l => /^To$/i.test(l));
-                    if (toIndex !== -1) {
-                        startIndex = toIndex + 2;
-                    } else {
-                        // 3. Address header
-                        const addressIndex = rawLines.findIndex(l => /^Address$/i.test(l));
-                        if (addressIndex !== -1) {
-                            startIndex = addressIndex + 1;
-                        }
-                    }
-                }
-
-                /* ---------- Address body (preserve order) ---------- */
-
-                // Step 1: keep raw address lines (NO semantic filtering yet)
-const addressLines = rawLines
-    .slice(startIndex)
-    .filter(l => l && l.trim());
-
-const csvTokens = addressLines
-    .flatMap(line => line.split(','))   // split comma-separated OCR lines
-    .map(token => token.trim())
-    .filter(token =>
-        token &&
-        !/^address:?$/i.test(token) &&  // removes "Address" or "Address:"
-        !careOfRegex.test(token)         // removes C/O, S/O, etc
-    );
-
-                /* ---------- House & Road (strictly positional) ---------- */
-
-             /* ---------- House & Road (CSV-aware, rules-based) ---------- */
-                
-// CSV tokenization (order preserved, OCR-safe)
-const csvParts = addressLines
+// Build CSV parts ONCE (order preserved)
+const csvParts = rawLines
     .flatMap(line =>
         line
-            // normalize OCR comma variants to standard comma
-            .replace(/[，﹐‚]/g, ',')
+            .replace(/[，﹐‚]/g, ',') // OCR comma variants
             .split(',')
     )
     .map(p => p.trim())
     .filter(Boolean);
 
+// ---------- PIN ----------
+const pinPart = csvParts.find(p => pinRegex.test(p));
+if (pinPart) {
+    document.getElementById('pincode').value = pinPart.match(pinRegex)[0];
+}
 
-// ----- HOUSE & ROAD -----
-let house = '';
+// ---------- HOUSE + ROAD ----------
+let houseParts = [];
 let road = '';
-let roadConfirmed = false;
+let i = 0;
 
-let idx = 0;
-let skipped = 0;
-
-// Ignore up to 3 leading junk tokens
-while (
-    idx < csvParts.length &&
-    skipped < 3 &&
-    (
-        /^address:?$/i.test(csvParts[idx]) ||
-        /^to$/i.test(csvParts[idx]) ||
-        careOfRegex.test(csvParts[idx])
-    )
-) {
-    idx++;
-    skipped++;
+// Skip any leading C/O tokens
+while (i < csvParts.length && careOfRegex.test(csvParts[i])) {
+    i++;
 }
 
-// First valid token is HOUSE
-if (idx < csvParts.length) {
-    house = csvParts[idx];
-    idx++;
-}
+// Collect house until road boundary
+for (; i < csvParts.length; i++) {
+    const part = csvParts[i];
 
-// Next token is ROAD
-if (idx < csvParts.length) {
-    road = csvParts[idx];
-
-    // Positive confirmation only (no logic change)
-    if (/\b(road|rd|street|st|lane|ln|avenue|ave)\b/i.test(road)) {
-        roadConfirmed = true;
+    // Road boundary (positive confirmation)
+    if (/\b(road|rd|street|st|lane|ln|drive|dr|avenue|ave)\b/i.test(part)) {
+        road = part;
+        i++;
+        break;
     }
+
+    // Stop if PIN encountered
+    if (pinRegex.test(part)) break;
+
+    houseParts.push(part);
 }
 
-document.getElementById('house').value = house || '';
-document.getElementById('road').value  = road || '';
+// Fallback: next token as road
+if (!road && i < csvParts.length) {
+    road = csvParts[i] || '';
+}
 
-/* ---------- Town deduction ---------- */
+document.getElementById('house').value = houseParts.join(' ').trim();
+document.getElementById('road').value  = road;
 
+// ---------- TOWN ----------
 let town = '';
 
-// Highest confidence: PO present (NO CLEANING)
+// Rule A: PO present → take that CSV string
 const poPart = csvParts.find(p => poRegex.test(p));
 if (poPart) {
     town = poPart.trim();
 }
 
-// Fallback: up to 3 CSV parts before PIN
+// Rule B: PO absent → last 3 CSV strings before PIN
 if (!town) {
     const pinIndex = csvParts.findIndex(p => pinRegex.test(p));
-
-    if (pinIndex > 0) {
+    if (pinIndex >= 3) {
         town = csvParts
-            .slice(Math.max(0, pinIndex - 3), pinIndex)
-            .map(p => p.replace(adminNoiseRegex, '').trim())
+            .slice(pinIndex - 3, pinIndex)
+            .map(p =>
+                p.replace(/\b(village|taluk|taluka|district|state)\b/ig, '').trim()
+            )
             .filter(Boolean)
-            .join(' ');
+            .join(', ');
     }
 }
 
-document.getElementById('town').value = town || '';
+document.getElementById('town').value = town;
 
-
-                document.getElementById('town').value = town.trim();
-            }
         }
         
         function showStatus(message, type) {
