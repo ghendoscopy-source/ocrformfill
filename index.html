@@ -580,16 +580,36 @@
                     !l.includes('India')
                 );
                 
-                const dobMatch = cleanText.match(/(?:DOB|Birth|YOB)[:\s]*(\d{2}\/\d{2}\/\d{4}|\d{4})/i);
-                if (dobMatch) {
-                    document.getElementById('dob').value = dobMatch[1];
-                } else {
-                    const yearMatch = cleanText.match(/\b(19|20)\d{2}\b/);
-                    if (yearMatch) {
-                        const year = parseInt(yearMatch[0]);
-                        const age = new Date().getFullYear() - year;
-                        document.getElementById('dob').value = `${age} years (Born ${year})`;
-                    }
+                // ---- DOB extraction: FULL DATE ONLY ----
+let dob = '';
+
+// DD/MM/YYYY or DD-MM-YYYY
+let m = cleanText.match(/\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/);
+if (m) {
+    dob = `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+// YYYY/MM/DD or YYYY-MM-DD
+if (!dob) {
+    m = cleanText.match(/\b(\d{4})[\/\-](\d{2})[\/\-](\d{2})\b/);
+    if (m) {
+        dob = `${m[1]}-${m[2]}-${m[3]}`;
+    }
+}
+
+// YYYYMMDD (no separators)
+if (!dob) {
+    m = cleanText.match(/\b(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/);
+    if (m) {
+        dob = `${m[0].slice(0,4)}-${m[0].slice(4,6)}-${m[0].slice(6,8)}`;
+    }
+}
+
+// Set DOB only if full date detected
+if (dob) {
+    document.getElementById('dob').value = dob;
+}
+
                 }
                 
                 const genderMatch = cleanText.match(/\b(Male|Female|MALE|FEMALE)\b/i);
