@@ -266,19 +266,12 @@
                 <h2>📤 Capture or Upload</h2>
                 
                 <div class="capture-buttons">
-                    <button class="btn-primary" id="openCameraBtn">📷 Open Camera</button>
-                    <button class="btn-primary" id="uploadFileBtn">📁 Upload File</button>
+                    <button class="btn-primary" id="capturePhotoBtn">📷 Capture with Camera</button>
+                    <button class="btn-primary" id="uploadFileBtn">📁 Choose from Gallery</button>
                 </div>
                 
+                <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
                 <input type="file" id="fileInput" accept="image/*" style="display: none;">
-                
-                <div id="cameraSection">
-                    <video id="cameraVideo" autoplay playsinline></video>
-                    <div class="btn-group" style="justify-content: center; margin-top: 15px;">
-                        <button class="btn-success" id="captureBtn">Capture Photo</button>
-                        <button class="btn-secondary" id="closeCameraBtn">Close Camera</button>
-                    </div>
-                </div>
                 
                 <div class="canvas-container">
                     <canvas id="selectionCanvas"></canvas>
@@ -299,6 +292,9 @@
             
             <div class="panel">
                 <h2>📋 Extracted Information</h2>
+                <p style="color: #6c757d; font-size: 0.9em; margin-bottom: 20px;">
+                    Data appears here after scanning, or type directly for manual entry
+                </p>
                 
                 <div class="field-group">
                     <label>Name</label>
@@ -341,15 +337,18 @@
                 </div>
                 
                 <div class="form-url-section">
-                    <h3 style="margin-bottom: 15px; color: #667eea;">Google Form Setup</h3>
-                    <div class="field-group">
-                        <label>Google Form URL</label>
-                        <input type="text" id="formUrl" placeholder="https://docs.google.com/forms/d/e/...">
-                    </div>
-                    <p style="color: #6c757d; font-size: 0.9em; margin-bottom: 15px;">
-                        Enter your form URL with proper entry IDs configured in the code
+                    <h3 style="margin-bottom: 15px; color: #667eea;">💾 Google Form Link</h3>
+                    <p style="color: #6c757d; font-size: 0.95em; margin-bottom: 15px; line-height: 1.5;">
+                        <strong>Setup once:</strong> Create a pre-filled form link with dummy data for all 8 fields, then paste it below.
                     </p>
-                    <button class="btn-success" id="fillFormBtn">Fill Google Form</button>
+                    <div class="field-group">
+                        <label>Pre-filled Form Link (paste once and save)</label>
+                        <input type="text" id="formUrl" placeholder="https://docs.google.com/forms/d/e/.../viewform?entry.123=...&entry.456=...">
+                    </div>
+                    <div class="btn-group" style="margin-top: 15px;">
+                        <button class="btn-success" id="fillFormBtn">Open Form with Scanned Data</button>
+                        <button class="btn-primary" id="openFormBtn">Open Blank Form (Manual Entry)</button>
+                    </div>
                 </div>
                 
                 <div class="btn-group" style="margin-top: 20px;">
@@ -367,15 +366,11 @@
         let isSelecting = false;
         let startX, startY, endX, endY;
         let selectionMode = null;
-        let cameraStream = null;
         
+        const cameraInput = document.getElementById('cameraInput');
         const fileInput = document.getElementById('fileInput');
-        const openCameraBtn = document.getElementById('openCameraBtn');
+        const capturePhotoBtn = document.getElementById('capturePhotoBtn');
         const uploadFileBtn = document.getElementById('uploadFileBtn');
-        const cameraSection = document.getElementById('cameraSection');
-        const cameraVideo = document.getElementById('cameraVideo');
-        const captureBtn = document.getElementById('captureBtn');
-        const closeCameraBtn = document.getElementById('closeCameraBtn');
         const selectIdentityBtn = document.getElementById('selectIdentityBtn');
         const selectAddressBtn = document.getElementById('selectAddressBtn');
         const resetBtn = document.getElementById('resetBtn');
@@ -383,7 +378,15 @@
         const progressFill = document.getElementById('progressFill');
         const status = document.getElementById('status');
         
+        capturePhotoBtn.addEventListener('click', () => cameraInput.click());
         uploadFileBtn.addEventListener('click', () => fileInput.click());
+        
+        cameraInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                loadImage(file);
+            }
+        });
         
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
@@ -391,42 +394,6 @@
                 loadImage(file);
             }
         });
-        
-        openCameraBtn.addEventListener('click', async () => {
-            try {
-                cameraStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' }
-                });
-                cameraVideo.srcObject = cameraStream;
-                cameraSection.style.display = 'block';
-                showStatus('Camera ready! Click "Capture Photo" when ready.', 'success');
-            } catch (error) {
-                showStatus('Camera access denied or not available.', 'error');
-            }
-        });
-        
-        captureBtn.addEventListener('click', () => {
-            const captureCanvas = document.createElement('canvas');
-            captureCanvas.width = cameraVideo.videoWidth;
-            captureCanvas.height = cameraVideo.videoHeight;
-            const captureCtx = captureCanvas.getContext('2d');
-            captureCtx.drawImage(cameraVideo, 0, 0);
-            
-            captureCanvas.toBlob((blob) => {
-                loadImage(blob);
-                closeCamera();
-            });
-        });
-        
-        closeCameraBtn.addEventListener('click', closeCamera);
-        
-        function closeCamera() {
-            if (cameraStream) {
-                cameraStream.getTracks().forEach(track => track.stop());
-                cameraStream = null;
-            }
-            cameraSection.style.display = 'none';
-        }
         
         function loadImage(file) {
             const reader = new FileReader();
@@ -727,9 +694,13 @@
         document.getElementById('fillFormBtn').addEventListener('click', () => {
             const formUrl = document.getElementById('formUrl').value;
             if (!formUrl) {
-                showStatus('Please enter a Google Form URL first.', 'error');
+                showStatus('Please paste your pre-filled form link first.', 'error');
                 return;
             }
+            
+            const urlParts = formUrl.split('?');
+            const baseUrl = urlParts[0];
+            const params = new URLSearchParams(urlParts[1] || '');
             
             const data = {
                 name: document.getElementById('name').value,
@@ -742,22 +713,28 @@
                 mobile: document.getElementById('mobile').value
             };
             
-            const baseUrl = formUrl.split('?')[0].replace('/viewform', '/formResponse');
+            const entryKeys = Array.from(params.keys()).filter(k => k.startsWith('entry.'));
+            const dataValues = [data.name, data.dob, data.gender, data.house, data.road, data.town, data.pincode, data.mobile];
             
-            const params = new URLSearchParams();
-            params.append('entry.1234567890', data.name);
-            params.append('entry.1234567891', data.dob);
-            params.append('entry.1234567892', data.gender);
-            params.append('entry.1234567893', data.house);
-            params.append('entry.1234567894', data.road);
-            params.append('entry.1234567895', data.town);
-            params.append('entry.1234567896', data.pincode);
-            params.append('entry.1234567897', data.mobile);
+            entryKeys.forEach((key, index) => {
+                if (index < dataValues.length && dataValues[index]) {
+                    params.set(key, dataValues[index]);
+                }
+            });
             
             const fillUrl = `${baseUrl}?${params.toString()}`;
-            
-            showStatus('Opening form with pre-filled data. Update entry IDs in code to match your form.', 'info');
             window.open(fillUrl, '_blank');
+            showStatus('Form opened with scanned data. Review and submit!', 'success');
+        });
+        
+        document.getElementById('openFormBtn').addEventListener('click', () => {
+            const formUrl = document.getElementById('formUrl').value;
+            if (!formUrl) {
+                showStatus('Please paste your pre-filled form link first.', 'error');
+                return;
+            }
+            window.open(formUrl.split('?')[0], '_blank');
+            showStatus('Opening blank form for manual entry...', 'info');
         });
     </script>
 </body>
