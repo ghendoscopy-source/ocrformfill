@@ -101,22 +101,28 @@
         
         .canvas-container {
             width: 100%;
+            height: 400px;
             text-align: center;
             margin: 20px 0;
-            overflow: auto;
+            overflow: scroll;
             border: 2px solid #667eea;
             border-radius: 10px;
             background: #f8f9fa;
             position: relative;
-            touch-action: none;
+            touch-action: pan-x pan-y;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .canvas-wrapper {
+            display: inline-block;
+            position: relative;
         }
         
         #selectionCanvas {
             border: none;
             cursor: crosshair;
             display: none;
-            transform-origin: top left;
-            transition: transform 0.1s ease-out;
+            max-width: none;
         }
         
         .btn-group {
@@ -279,11 +285,17 @@
                 <input type="file" id="fileInput" accept="image/*" style="display: none;">
                 
                 <div class="canvas-container" id="canvasContainer">
-                    <canvas id="selectionCanvas"></canvas>
+                    <div class="canvas-wrapper" id="canvasWrapper">
+                        <canvas id="selectionCanvas"></canvas>
+                    </div>
                 </div>
                 
                 <div style="text-align: center; color: #6c757d; font-size: 0.9em; margin: 10px 0;">
-                    💡 Use pinch gesture to zoom canvas for precise selection
+                    💡 Pinch to zoom • Drag with 2 fingers to pan
+                </div>
+                
+                <div style="text-align: center; margin: 10px 0;">
+                    <button class="btn-secondary" id="zoomResetBtn" style="display: none;">Reset Zoom (1x)</button>
                 </div>
                 
                 <div class="btn-group">
@@ -373,14 +385,15 @@
         let canvas = document.getElementById('selectionCanvas');
         let ctx = canvas.getContext('2d');
         let canvasContainer = document.getElementById('canvasContainer');
+        let canvasWrapper = document.getElementById('canvasWrapper');
         let isSelecting = false;
         let startX, startY, endX, endY;
         let selectionMode = null;
         
         // Zoom variables
-        let scale = 1;
-        let lastDistance = 0;
-        let isPinching = false;
+        let currentScale = 1;
+        let initialDistance = 0;
+        let isPanning = false;
         
         const cameraInput = document.getElementById('cameraInput');
         const fileInput = document.getElementById('fileInput');
@@ -389,6 +402,7 @@
         const selectIdentityBtn = document.getElementById('selectIdentityBtn');
         const selectAddressBtn = document.getElementById('selectAddressBtn');
         const resetBtn = document.getElementById('resetBtn');
+        const zoomResetBtn = document.getElementById('zoomResetBtn');
         const progressBar = document.getElementById('progressBar');
         const progressFill = document.getElementById('progressFill');
         const status = document.getElementById('status');
@@ -415,16 +429,27 @@
             reader.onload = (e) => {
                 img.src = e.target.result;
                 img.onload = () => {
+                    // Set canvas to actual image size
                     canvas.width = img.width;
                     canvas.height = img.height;
+                    
+                    // Scale down display if image is too large
+                    const maxWidth = canvasContainer.clientWidth - 40;
+                    const displayScale = Math.min(1, maxWidth / img.width);
+                    
+                    canvas.style.width = (img.width * displayScale) + 'px';
+                    canvas.style.height = (img.height * displayScale) + 'px';
                     canvas.style.display = 'block';
-                    scale = 1;
-                    canvas.style.transform = `scale(${scale})`;
+                    
+                    currentScale = 1;
+                    canvasWrapper.style.transform = `scale(${currentScale})`;
+                    
                     ctx.drawImage(img, 0, 0);
                     selectIdentityBtn.disabled = false;
                     selectAddressBtn.disabled = false;
                     resetBtn.disabled = false;
-                    showStatus('Image loaded! Use pinch to zoom, then select regions.', 'success');
+                    zoomResetBtn.style.display = 'inline-block';
+                    showStatus('Image loaded! Pinch to zoom, then select regions.', 'success');
                 };
             };
             reader.readAsDataURL(file);
@@ -443,9 +468,15 @@
         resetBtn.addEventListener('click', () => {
             ctx.drawImage(img, 0, 0);
             selectionMode = null;
-            scale = 1;
-            canvas.style.transform = `scale(${scale})`;
             showStatus('Selection reset. Choose a block to scan.', 'info');
+        });
+        
+        zoomResetBtn.addEventListener('click', () => {
+            currentScale = 1;
+            canvasWrapper.style.transform = `scale(${currentScale})`;
+            canvasContainer.scrollLeft = 0;
+            canvasContainer.scrollTop = 0;
+            showStatus('Zoom reset to 1x', 'info');
         });
         
         canvas.addEventListener('mousedown', (e) => {
@@ -499,68 +530,61 @@
         
         canvas.addEventListener('touchstart', (e) => {
             if (e.touches.length === 2) {
-                // Pinch zoom
-                isPinching = true;
+                // Two finger pinch/pan
+                isPanning = true;
                 isSelecting = false;
                 const touch1 = e.touches[0];
                 const touch2 = e.touches[1];
-                lastDistance = Math.hypot(
+                initialDistance = Math.hypot(
                     touch2.clientX - touch1.clientX,
                     touch2.clientY - touch1.clientY
                 );
                 e.preventDefault();
-            } else if (e.touches.length === 1 && !isPinching && selectionMode) {
-                // Selection
+            } else if (e.touches.length === 1 && selectionMode && !isPanning) {
+                // Single finger selection
                 isSelecting = true;
                 const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / (rect.width * scale);
-                const scaleY = canvas.height / (rect.height * scale);
                 const touch = e.touches[0];
-                startX = (touch.clientX - rect.left) * scaleX;
-                startY = (touch.clientY - rect.top) * scaleY;
+                startX = (touch.clientX - rect.left) * (canvas.width / rect.width);
+                startY = (touch.clientY - rect.top) * (canvas.height / rect.height);
                 e.preventDefault();
             }
         });
         
         canvas.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 2 && isPinching) {
+            if (e.touches.length === 2 && isPanning) {
                 // Pinch zoom
                 const touch1 = e.touches[0];
                 const touch2 = e.touches[1];
-                const distance = Math.hypot(
+                const currentDistance = Math.hypot(
                     touch2.clientX - touch1.clientX,
                     touch2.clientY - touch1.clientY
                 );
                 
-                if (lastDistance > 0) {
-                    const delta = distance - lastDistance;
-                    scale += delta * 0.01;
-                    scale = Math.max(1, Math.min(scale, 4)); // Limit between 1x and 4x
-                    canvas.style.transform = `scale(${scale})`;
+                if (initialDistance > 0) {
+                    const scaleChange = currentDistance / initialDistance;
+                    const newScale = currentScale * scaleChange;
                     
-                    // Adjust container scroll to keep zoom centered
-                    const rect = canvas.getBoundingClientRect();
-                    const centerX = (touch1.clientX + touch2.clientX) / 2 - rect.left;
-                    const centerY = (touch1.clientY + touch2.clientY) / 2 - rect.top;
+                    // Limit zoom between 1x and 3x
+                    if (newScale >= 1 && newScale <= 3) {
+                        currentScale = newScale;
+                        canvasWrapper.style.transform = `scale(${currentScale})`;
+                        canvasWrapper.style.transformOrigin = 'center center';
+                    }
                     
-                    canvasContainer.scrollLeft = (centerX * scale) - (canvasContainer.clientWidth / 2);
-                    canvasContainer.scrollTop = (centerY * scale) - (canvasContainer.clientHeight / 2);
+                    initialDistance = currentDistance;
                 }
-                
-                lastDistance = distance;
                 e.preventDefault();
-            } else if (isSelecting && !isPinching) {
-                // Selection
+            } else if (isSelecting && !isPanning) {
+                // Draw selection rectangle
                 const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / (rect.width * scale);
-                const scaleY = canvas.height / (rect.height * scale);
                 const touch = e.touches[0];
-                endX = (touch.clientX - rect.left) * scaleX;
-                endY = (touch.clientY - rect.top) * scaleY;
+                endX = (touch.clientX - rect.left) * (canvas.width / rect.width);
+                endY = (touch.clientY - rect.top) * (canvas.height / rect.height);
                 
                 ctx.drawImage(img, 0, 0);
                 ctx.strokeStyle = selectionMode === 'identity' ? '#667eea' : '#28a745';
-                ctx.lineWidth = 3 / scale;
+                ctx.lineWidth = 3;
                 ctx.strokeRect(startX, startY, endX - startX, endY - startY);
                 ctx.fillStyle = selectionMode === 'identity' ? 'rgba(102, 126, 234, 0.1)' : 'rgba(40, 167, 69, 0.1)';
                 ctx.fillRect(startX, startY, endX - startX, endY - startY);
@@ -569,6 +593,13 @@
         });
         
         canvas.addEventListener('touchend', async (e) => {
+            if (isPanning) {
+                isPanning = false;
+                initialDistance = 0;
+                e.preventDefault();
+                return;
+            }
+            
             if (!isSelecting) return;
             e.preventDefault();
             isSelecting = false;
