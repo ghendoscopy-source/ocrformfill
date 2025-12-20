@@ -722,6 +722,8 @@
                 }
             } 
             else if (mode === 'address') {
+                const rawLines = lines;
+                
                 /* ---------- Address parsing (CSV-only, rule-pure) ---------- */
 
 // Build CSV parts ONCE (order preserved)
