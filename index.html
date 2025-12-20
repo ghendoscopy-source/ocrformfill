@@ -513,7 +513,11 @@
         canvas.addEventListener('mouseup', async () => {
             if (!isSelecting) return;
             isSelecting = false;
-            
+            // FIX: ensure endX/endY exist even if mouse didn't move
+           if (endX === undefined || endY === undefined) {
+           endX = startX + 1;
+           endY = startY + 1;
+    }
             const x = Math.min(startX, endX);
             const y = Math.min(startY, endY);
             const w = Math.abs(endX - startX);
@@ -606,7 +610,11 @@
             if (!isSelecting) return;
             e.preventDefault();
             isSelecting = false;
-            
+            // FIX: ensure endX/endY exist even if finger didn't move
+           if (endX === undefined || endY === undefined) {
+           endX = startX + 1;
+           endY = startY + 1;
+          }
             const x = Math.min(startX, endX);
             const y = Math.min(startY, endY);
             const w = Math.abs(endX - startX);
