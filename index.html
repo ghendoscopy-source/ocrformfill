@@ -364,7 +364,7 @@
                     </p>
                     <div class="field-group">
                         <label>Pre-filled Form Link (paste once and save)</label>
-                        <input type="text" id="formUrl" placeholder="https://docs.google.com/forms/d/e/.../viewform?entry.123=...&entry.456=...">
+                        <input type="text" id="formUrl" placeholder="https://docs.google.com/forms/d/e/1FAIpQLSdzmqfByBiXII5NDK8wwBFMgcJyCuY9lgzpTcLqiAoPne9BMQ/viewform?usp=pp_url&entry.1243218095=test&entry.357845090=2011-01-01&entry.367282175=Male&entry.294542757=test&entry.2090591826=GH+road&entry.773748203=Kochi&entry.1489632830=682011&entry.1800764683=8400334118">
                     </div>
                     <div class="btn-group" style="margin-top: 15px;">
                         <button class="btn-success" id="fillFormBtn">Open Form with Scanned Data</button>
@@ -722,15 +722,16 @@
                 }
             } 
             else if (mode === 'address') {
+                /* ---------- English-only lines (already enforced upstream) ---------- */
                 const rawLines = lines.map(l => l.trim()).filter(l => l.length > 0);
-                
+
                 const careOfRegex = /\b(C\/O|S\/O|D\/O|W\/O)\b/i;
                 const pinRegex = /\b\d{6}\b/;
                 const mobileRegex = /\b[6-9]\d{9}\b/;
                 const poRegex = /\b(P\.?O\.?|Post Office)\b/i;
                 const adminNoiseRegex = /\b(taluk|taluka|village|district|state)\b/i;
 
-                // Extract PIN & MOBILE
+                /* ---------- PIN & MOBILE (anchors, anywhere in block) ---------- */
                 rawLines.forEach(l => {
                     const pinMatch = l.match(pinRegex);
                     if (pinMatch) {
@@ -743,16 +744,20 @@
                     }
                 });
 
-                // Address start resolution
+                /* ---------- ADDRESS START RESOLUTION (priority-based) ---------- */
                 let startIndex = 0;
+
+                // 1. Care Of (highest priority)
                 const coIndex = rawLines.findIndex(l => careOfRegex.test(l));
                 if (coIndex !== -1) {
                     startIndex = coIndex + 1;
                 } else {
+                    // 2. To + Name
                     const toIndex = rawLines.findIndex(l => /^To$/i.test(l));
                     if (toIndex !== -1) {
                         startIndex = toIndex + 2;
                     } else {
+                        // 3. Address header
                         const addressIndex = rawLines.findIndex(l => /^Address$/i.test(l));
                         if (addressIndex !== -1) {
                             startIndex = addressIndex + 1;
@@ -760,7 +765,7 @@
                     }
                 }
 
-                // Address body
+                /* ---------- Address body (preserve order) ---------- */
                 const addressLines = rawLines
                     .slice(startIndex)
                     .filter(l =>
@@ -769,19 +774,23 @@
                         !careOfRegex.test(l)
                     );
 
-                // House & Road (positional)
+                /* ---------- House & Road (strictly positional) ---------- */
                 document.getElementById('house').value = addressLines[0] || '';
-                document.getElementById('road').value = addressLines[1] || '';
+                document.getElementById('road').value  = addressLines[1] || '';
 
-                // Town deduction
+                /* ---------- Town deduction ---------- */
                 let town = '';
+
+                // Highest confidence: PO present
                 const poLine = addressLines.find(l => poRegex.test(l));
                 if (poLine) {
                     town = poLine.replace(poRegex, '').trim();
                 }
 
+                // Fallback: up to 3 English lines before PIN
                 if (!town) {
                     const pinLineIndex = addressLines.findIndex(l => pinRegex.test(l));
+
                     if (pinLineIndex > 0) {
                         town = addressLines
                             .slice(Math.max(0, pinLineIndex - 3), pinLineIndex)
