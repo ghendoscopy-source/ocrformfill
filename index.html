@@ -763,63 +763,61 @@
                 let startIdx = 0;
                 const personName = document.getElementById('name').value.trim().toLowerCase();
                 
-                // 1. SKIP JUNK: Process of Elimination
+       /* ---------- ADDRESS PARSING (Enforced Positional Logic) ---------- */
+                let startIdx = 0;
+                const personName = document.getElementById('name').value.trim().toLowerCase();
+                
+                // 1. SKIP JUNK: Process of Elimination (Uses .includes for precision)
                 while (startIdx < csvTokens.length) {
-                    const token = csvTokens[startIdx].trim().toLowerCase();
+                    let token = csvTokens[startIdx].trim().toLowerCase();
                     
-                    // Skip empty tokens
                     if (!token) {
                         startIdx++;
                         continue;
                     }
 
-                    // Skip "Address" or "To" labels
-                    if (token === "address" || token === "to" || token === "address:") {
+                    // Precise Exclusion A: Skip if segment contains "Address" or "To" anywhere
+                    if (token.includes("address") || token.includes("to")) {
                         startIdx++;
                         continue;
                     }
                     
-                    // Skip C/O, S/O, D/O, W/O segments (including the name attached to them)
-                    if (/^(c\/?o|s\/?o|d\/?o|w\/?o|care|son|daughter|wife|cio|sio)/i.test(token)) {
+                    // Precise Exclusion B: Skip if segment contains C/O, S/O, D/O, W/O anywhere
+                    // Matches "C/O Name", "C/O:Name", "CIO", etc.
+                    if (/\b(c\/?o|s\/?o|d\/?o|w\/?o|care|son|daughter|wife|cio|sio)\b/i.test(token)) {
                         startIdx++;
                         continue;
                     }
                     
-                    // Skip the person's own name if it appears as a segment
-                    if (personName && (token === personName || personName.includes(token)) && token.length > 3) {
+                    // Precise Exclusion C: Skip the person's own name
+                    if (personName && (token === personName || personName.includes(token) || token.includes(personName)) && token.length > 3) {
                         startIdx++;
                         continue;
                     }
 
-                    // The first token that survives the above is the HOUSE
+                    // If it survived, this index is the HOUSE
                     break;
                 }
 
-                // 2. ASSIGN HOUSE & ROAD
-                // House is the first valid token found
+                // 2. ASSIGN HOUSE & ROAD (Strictly Positional)
                 let house = (startIdx < csvTokens.length) ? csvTokens[startIdx].trim() : "";
-                
-                // Road is strictly the NEXT item after the house comma
                 let road = (startIdx + 1 < csvTokens.length) ? csvTokens[startIdx + 1].trim() : "";
 
                 document.getElementById('house').value = house;
                 document.getElementById('road').value = road;
 
                 /* ---------- TOWN (Bottom-Up Logic) ---------- */
-                // We keep your logic of looking for the PIN and working backwards for Town
                 let town = '';
                 const pinIdx = csvTokens.findIndex(t => pinRegex.test(t));
                 
                 if (pinIdx !== -1) {
-                    // Get segments between Road and PIN (usually Town, District, State)
-                    const remainingIdx = startIdx + 2; // Start looking after House and Road
+                    const remainingIdx = startIdx + 2; 
                     if (remainingIdx < pinIdx) {
                         const townParts = csvTokens.slice(remainingIdx, pinIdx);
-                        // Take the last 2-3 parts before PIN which usually represent Town/City
+                        // Take last 2 segments before PIN
                         town = townParts.slice(-2).join(', ').trim();
                     }
                 }
-
                 document.getElementById('town').value = town;
             }
         }
