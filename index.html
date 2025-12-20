@@ -778,23 +778,35 @@
                         continue;
                     }
                     
-                    // Skip C/O, S/O, D/O, W/O tokens
-                    if (careOfRegex.test(token)) {
+                    // Skip ANY token containing C/O, S/O, D/O, W/O (even if part of longer string)
+                    if (/C\/O|S\/O|D\/O|W\/O/i.test(token)) {
                         startIdx++;
                         continue;
                     }
                     
-                    // Skip person names (proper case alpha only, no numbers, not too short)
-                    // This catches names after C/O like "Thukalan Paulose George"
-                    if (/^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/.test(token) && 
+                    // Skip person names - broader pattern
+                    // Any token that's mostly letters with no numbers and not too short
+                    if (/^[A-Za-z\s]+$/.test(token) && 
                         token.length > 3 && 
-                        !token.match(/\d/) &&
-                        !roadKeywordRegex.test(token)) {
+                        !roadKeywordRegex.test(token) &&
+                        !/\d/.test(token)) { // No digits means it's likely a name
                         startIdx++;
                         continue;
                     }
                     
-                    // If token survived all filters, this is the start of real address
+                    // POSITIVE CONFIRMATION: Token has numbers (likely house number/building)
+                    // OR has road keywords - this is real address start
+                    if (/\d/.test(token) || roadKeywordRegex.test(token)) {
+                        break;
+                    }
+                    
+                    // Safety: skip anything else that's pure text with no numbers
+                    if (!/\d/.test(token)) {
+                        startIdx++;
+                        continue;
+                    }
+                    
+                    // If we get here, assume it's the start
                     break;
                 }
 
