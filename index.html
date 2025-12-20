@@ -722,86 +722,125 @@
                 }
             } 
             else if (mode === 'address') {
-                const rawLines = lines;
+                /* ---------- CSV-FIRST PROCESSING (Aadhaar is comma-separated) ---------- */
                 
-                /* ---------- Address parsing (CSV-only, rule-pure) ---------- */
+                // Build CSV tokens from all lines (OCR may split across lines)
+                const csvTokens = lines
+                    .join(' ') // Rejoin lines that OCR split
+                    .replace(/[，﹐‚]/g, ',') // Normalize OCR comma variants
+                    .split(',')
+                    .map(t => t.trim())
+                    .filter(Boolean);
 
-// Build CSV parts ONCE (order preserved)
-const csvParts = rawLines
-    .flatMap(line =>
-        line
-            .replace(/[，﹐‚]/g, ',') // OCR comma variants
-            .split(',')
-    )
-    .map(p => p.trim())
-    .filter(Boolean);
+                const careOfRegex = /\b(C\/O|S\/O|D\/O|W\/O)\b/i;
+                const pinRegex = /\b\d{6}\b/;
+                const mobileRegex = /\b[6-9]\d{9}\b/;
+                const poRegex = /\b(P\.?O\.?|Post Office)\b/i;
+                const roadKeywordRegex = /\b(road|rd|street|st|lane|ln|drive|dr|avenue|ave|courtyard)\b/i;
+                const adminNoiseRegex = /\b(village|taluk|taluka|district|state)\b/ig;
 
-// ---------- PIN ----------
-const pinPart = csvParts.find(p => pinRegex.test(p));
-if (pinPart) {
-    document.getElementById('pincode').value = pinPart.match(pinRegex)[0];
-}
+                /* ---------- PIN & MOBILE (extract first, anywhere in tokens) ---------- */
+                
+                csvTokens.forEach(token => {
+                    const pinMatch = token.match(pinRegex);
+                    if (pinMatch) {
+                        document.getElementById('pincode').value = pinMatch[0];
+                    }
 
-// ---------- HOUSE + ROAD ----------
-let houseParts = [];
-let road = '';
-let i = 0;
+                    const mobileMatch = token.match(mobileRegex);
+                    if (mobileMatch) {
+                        document.getElementById('mobile').value = mobileMatch[0];
+                    }
+                });
+                
+                // If no mobile found, set placeholder
+                if (!document.getElementById('mobile').value) {
+                    document.getElementById('mobile').value = '9999999999';
+                }
 
-// Skip any leading C/O tokens
-while (i < csvParts.length && careOfRegex.test(csvParts[i])) {
-    i++;
-}
+                /* ---------- FIND ADDRESS START (skip headers/C/O) ---------- */
+                
+                let startIdx = 0;
+                
+                // Skip "Address:" header token
+                if (csvTokens[0] && /^Address:?$/i.test(csvTokens[0])) {
+                    startIdx = 1;
+                }
+                
+                // Skip "To" + Name (next 2 tokens)
+                if (csvTokens[startIdx] && /^To$/i.test(csvTokens[startIdx])) {
+                    startIdx += 2;
+                }
+                
+                // Skip C/O token (inline, not whole line)
+                if (csvTokens[startIdx] && careOfRegex.test(csvTokens[startIdx])) {
+                    startIdx++;
+                }
+                
+                // Also skip the name after C/O (next token is person's name)
+                if (startIdx > 0 && csvTokens[startIdx] && /^[A-Z][a-z]+(\s[A-Z][a-z]+)*$/.test(csvTokens[startIdx])) {
+                    startIdx++;
+                }
 
-// Collect house until road boundary
-for (; i < csvParts.length; i++) {
-    const part = csvParts[i];
+                /* ---------- FIND ADDRESS END (PIN location) ---------- */
+                
+                const pinIdx = csvTokens.findIndex(t => pinRegex.test(t));
+                const addressTokens = pinIdx !== -1 ? csvTokens.slice(startIdx, pinIdx) : csvTokens.slice(startIdx);
 
-    // Road boundary (positive confirmation)
-    if (/\b(road|rd|street|st|lane|ln|drive|dr|avenue|ave)\b/i.test(part)) {
-        road = part;
-        i++;
-        break;
-    }
+                /* ---------- HOUSE (collect until road boundary) ---------- */
+                
+                let houseTokens = [];
+                let roadToken = '';
+                let roadIdx = -1;
+                
+                for (let i = 0; i < addressTokens.length; i++) {
+                    const token = addressTokens[i];
+                    
+                    // Road boundary detected (keyword present)
+                    if (roadKeywordRegex.test(token)) {
+                        roadToken = token;
+                        roadIdx = i;
+                        break;
+                    }
+                    
+                    // Otherwise, it's part of house
+                    houseTokens.push(token);
+                }
+                
+                document.getElementById('house').value = houseTokens.join(' ').trim();
 
-    // Stop if PIN encountered
-    if (pinRegex.test(part)) break;
+                /* ---------- ROAD (token with keyword OR next token after house) ---------- */
+                
+                // If no keyword found, take next token as road
+                if (!roadToken && roadIdx === -1 && houseTokens.length < addressTokens.length) {
+                    roadToken = addressTokens[houseTokens.length] || '';
+                    roadIdx = houseTokens.length;
+                }
+                
+                document.getElementById('road').value = roadToken;
 
-    houseParts.push(part);
-}
-
-// Fallback: next token as road
-if (!road && i < csvParts.length) {
-    road = csvParts[i] || '';
-}
-
-document.getElementById('house').value = houseParts.join(' ').trim();
-document.getElementById('road').value  = road;
-
-// ---------- TOWN ----------
-let town = '';
-
-// Rule A: PO present → take that CSV string
-const poPart = csvParts.find(p => poRegex.test(p));
-if (poPart) {
-    town = poPart.trim();
-}
-
-// Rule B: PO absent → last 3 CSV strings before PIN
-if (!town) {
-    const pinIndex = csvParts.findIndex(p => pinRegex.test(p));
-    if (pinIndex >= 3) {
-        town = csvParts
-            .slice(pinIndex - 3, pinIndex)
-            .map(p =>
-                p.replace(/\b(village|taluk|taluka|district|state)\b/ig, '').trim()
-            )
-            .filter(Boolean)
-            .join(', ');
-    }
-}
-
-document.getElementById('town').value = town;
-
+                /* ---------- TOWN (PO token OR last 3 tokens before PIN) ---------- */
+                
+                let town = '';
+                
+                // Rule A: PO present (highest priority)
+                const poToken = addressTokens.find(t => poRegex.test(t));
+                if (poToken) {
+                    town = poToken.trim();
+                } 
+                // Rule B: Last 3 CSV tokens before PIN (cleaned)
+                else {
+                    const remainingTokens = roadIdx !== -1 ? addressTokens.slice(roadIdx + 1) : addressTokens;
+                    const townTokens = remainingTokens.slice(-3); // Last 3 tokens
+                    
+                    town = townTokens
+                        .map(t => t.replace(adminNoiseRegex, '').trim())
+                        .filter(Boolean)
+                        .join(', ');
+                }
+                
+                document.getElementById('town').value = town;
+            }
         }
         
         function showStatus(message, type) {
