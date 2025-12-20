@@ -776,14 +776,10 @@
 
                 /* ---------- Address body (preserve order) ---------- */
 
-                const addressLines = rawLines
-                    .slice(startIndex)
-                    .filter(l =>
-                        !/^To$/i.test(l) &&
-                        !/^Address$/i.test(l) &&
-                        !careOfRegex.test(l)
-                    );
-
+                // Step 1: keep raw address lines (NO semantic filtering yet)
+const addressLines = rawLines
+    .slice(startIndex)
+    .filter(l => l && l.trim());
 
 const csvTokens = addressLines
     .flatMap(line => line.split(','))   // split comma-separated OCR lines
