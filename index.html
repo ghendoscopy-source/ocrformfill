@@ -674,7 +674,7 @@
                     !l.includes('India')
                 );
                 
-                // ---- DOB extraction: FULL DATE ONLY (YYYY-MM-DD format for Google Forms) ----
+                // ---- DOB extraction: FULL DATE ONLY ----
                 let dob = '';
 
                 // DD/MM/YYYY or DD-MM-YYYY
@@ -723,7 +723,9 @@
             } 
             else if (mode === 'address') {
                 /* ---------- English-only lines (already enforced upstream) ---------- */
-                const rawLines = lines.map(l => l.trim()).filter(l => l.length > 0);
+                const rawLines = lines
+                    .map(l => l.trim())
+                    .filter(l => l.length > 0);
 
                 const careOfRegex = /\b(C\/O|S\/O|D\/O|W\/O)\b/i;
                 const pinRegex = /\b\d{6}\b/;
