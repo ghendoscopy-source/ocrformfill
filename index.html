@@ -734,6 +734,7 @@
                 const adminNoiseRegex = /\b(taluk|taluka|village|district|state)\b/i;
 
                 /* ---------- PIN & MOBILE (anchors, anywhere in block) ---------- */
+
                 rawLines.forEach(l => {
                     const pinMatch = l.match(pinRegex);
                     if (pinMatch) {
@@ -745,8 +746,14 @@
                         document.getElementById('mobile').value = mobileMatch[0];
                     }
                 });
+                
+                // If no mobile found, set placeholder for nurse to update
+                if (!document.getElementById('mobile').value) {
+                    document.getElementById('mobile').value = '9999999999';
+                }
 
                 /* ---------- ADDRESS START RESOLUTION (priority-based) ---------- */
+
                 let startIndex = 0;
 
                 // 1. Care Of (highest priority)
@@ -768,6 +775,7 @@
                 }
 
                 /* ---------- Address body (preserve order) ---------- */
+
                 const addressLines = rawLines
                     .slice(startIndex)
                     .filter(l =>
@@ -777,10 +785,12 @@
                     );
 
                 /* ---------- House & Road (strictly positional) ---------- */
+
                 document.getElementById('house').value = addressLines[0] || '';
                 document.getElementById('road').value  = addressLines[1] || '';
 
                 /* ---------- Town deduction ---------- */
+
                 let town = '';
 
                 // Highest confidence: PO present
