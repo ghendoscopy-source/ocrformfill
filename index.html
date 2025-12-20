@@ -758,115 +758,68 @@
                     document.getElementById('mobile').value = '9999999999';
                 }
 
-                /* ---------- FIND ADDRESS START (skip ALL junk at beginning) ---------- */
+                /* ---------- ADDRESS PARSING (Enforced Positional Logic) ---------- */
                 
                 let startIdx = 0;
+                const personName = document.getElementById('name').value.trim().toLowerCase();
                 
-                // Skip all leading junk tokens one by one
+                // 1. SKIP JUNK: Process of Elimination
                 while (startIdx < csvTokens.length) {
-                    const token = csvTokens[startIdx];
+                    const token = csvTokens[startIdx].trim().toLowerCase();
                     
-                    // Skip "Address" or "Address:"
-                    if (/^Address:?$/i.test(token)) {
+                    // Skip empty tokens
+                    if (!token) {
+                        startIdx++;
+                        continue;
+                    }
+
+                    // Skip "Address" or "To" labels
+                    if (token === "address" || token === "to" || token === "address:") {
                         startIdx++;
                         continue;
                     }
                     
-                    // Skip "To"
-                    if (/^To$/i.test(token)) {
+                    // Skip C/O, S/O, D/O, W/O segments (including the name attached to them)
+                    if (/^(c\/?o|s\/?o|d\/?o|w\/?o|care|son|daughter|wife|cio|sio)/i.test(token)) {
                         startIdx++;
                         continue;
                     }
                     
-                    // Skip ANY token containing C/O, S/O, D/O, W/O (even if part of longer string)
-                    if (/C\/O|S\/O|D\/O|W\/O/i.test(token)) {
+                    // Skip the person's own name if it appears as a segment
+                    if (personName && (token === personName || personName.includes(token)) && token.length > 3) {
                         startIdx++;
                         continue;
                     }
-                    
-                    // Skip person names - broader pattern
-                    // Any token that's mostly letters with no numbers and not too short
-                    if (/^[A-Za-z\s]+$/.test(token) && 
-                        token.length > 3 && 
-                        !roadKeywordRegex.test(token) &&
-                        !/\d/.test(token)) { // No digits means it's likely a name
-                        startIdx++;
-                        continue;
-                    }
-                    
-                    // POSITIVE CONFIRMATION: Token has numbers (likely house number/building)
-                    // OR has road keywords - this is real address start
-                    if (/\d/.test(token) || roadKeywordRegex.test(token)) {
-                        break;
-                    }
-                    
-                    // Safety: skip anything else that's pure text with no numbers
-                    if (!/\d/.test(token)) {
-                        startIdx++;
-                        continue;
-                    }
-                    
-                    // If we get here, assume it's the start
+
+                    // The first token that survives the above is the HOUSE
                     break;
                 }
 
-                /* ---------- FIND ADDRESS END (PIN location) ---------- */
+                // 2. ASSIGN HOUSE & ROAD
+                // House is the first valid token found
+                let house = (startIdx < csvTokens.length) ? csvTokens[startIdx].trim() : "";
                 
-                const pinIdx = csvTokens.findIndex(t => pinRegex.test(t));
-                const addressTokens = pinIdx !== -1 ? csvTokens.slice(startIdx, pinIdx) : csvTokens.slice(startIdx);
+                // Road is strictly the NEXT item after the house comma
+                let road = (startIdx + 1 < csvTokens.length) ? csvTokens[startIdx + 1].trim() : "";
 
-                /* ---------- HOUSE (collect until road boundary) ---------- */
-                
-                let houseTokens = [];
-                let roadToken = '';
-                let roadIdx = -1;
-                
-                for (let i = 0; i < addressTokens.length; i++) {
-                    const token = addressTokens[i];
-                    
-                    // Road boundary detected (keyword present)
-                    if (roadKeywordRegex.test(token)) {
-                        roadToken = token;
-                        roadIdx = i;
-                        break;
-                    }
-                    
-                    // Otherwise, it's part of house
-                    houseTokens.push(token);
-                }
-                
-                document.getElementById('house').value = houseTokens.join(' ').trim();
+                document.getElementById('house').value = house;
+                document.getElementById('road').value = road;
 
-                /* ---------- ROAD (token with keyword OR next token after house) ---------- */
-                
-                // If no keyword found, take next token as road
-                if (!roadToken && roadIdx === -1 && houseTokens.length < addressTokens.length) {
-                    roadToken = addressTokens[houseTokens.length] || '';
-                    roadIdx = houseTokens.length;
-                }
-                
-                document.getElementById('road').value = roadToken;
-
-                /* ---------- TOWN (PO token OR last 3 tokens before PIN) ---------- */
-                
+                /* ---------- TOWN (Bottom-Up Logic) ---------- */
+                // We keep your logic of looking for the PIN and working backwards for Town
                 let town = '';
+                const pinIdx = csvTokens.findIndex(t => pinRegex.test(t));
                 
-                // Rule A: PO present (highest priority)
-                const poToken = addressTokens.find(t => poRegex.test(t));
-                if (poToken) {
-                    town = poToken.trim();
-                } 
-                // Rule B: Last 3 CSV tokens before PIN (cleaned)
-                else {
-                    const remainingTokens = roadIdx !== -1 ? addressTokens.slice(roadIdx + 1) : addressTokens;
-                    const townTokens = remainingTokens.slice(-3); // Last 3 tokens
-                    
-                    town = townTokens
-                        .map(t => t.replace(adminNoiseRegex, '').trim())
-                        .filter(Boolean)
-                        .join(', ');
+                if (pinIdx !== -1) {
+                    // Get segments between Road and PIN (usually Town, District, State)
+                    const remainingIdx = startIdx + 2; // Start looking after House and Road
+                    if (remainingIdx < pinIdx) {
+                        const townParts = csvTokens.slice(remainingIdx, pinIdx);
+                        // Take the last 2-3 parts before PIN which usually represent Town/City
+                        town = townParts.slice(-2).join(', ').trim();
+                    }
                 }
-                
+
                 document.getElementById('town').value = town;
             }
         }
