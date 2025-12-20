@@ -758,28 +758,44 @@
                     document.getElementById('mobile').value = '9999999999';
                 }
 
-                /* ---------- FIND ADDRESS START (skip headers/C/O) ---------- */
+                /* ---------- FIND ADDRESS START (skip ALL junk at beginning) ---------- */
                 
                 let startIdx = 0;
                 
-                // Skip "Address:" header token
-                if (csvTokens[0] && /^Address:?$/i.test(csvTokens[0])) {
-                    startIdx = 1;
-                }
-                
-                // Skip "To" + Name (next 2 tokens)
-                if (csvTokens[startIdx] && /^To$/i.test(csvTokens[startIdx])) {
-                    startIdx += 2;
-                }
-                
-                // Skip C/O token (inline, not whole line)
-                if (csvTokens[startIdx] && careOfRegex.test(csvTokens[startIdx])) {
-                    startIdx++;
-                }
-                
-                // Also skip the name after C/O (next token is person's name)
-                if (startIdx > 0 && csvTokens[startIdx] && /^[A-Z][a-z]+(\s[A-Z][a-z]+)*$/.test(csvTokens[startIdx])) {
-                    startIdx++;
+                // Skip all leading junk tokens one by one
+                while (startIdx < csvTokens.length) {
+                    const token = csvTokens[startIdx];
+                    
+                    // Skip "Address" or "Address:"
+                    if (/^Address:?$/i.test(token)) {
+                        startIdx++;
+                        continue;
+                    }
+                    
+                    // Skip "To"
+                    if (/^To$/i.test(token)) {
+                        startIdx++;
+                        continue;
+                    }
+                    
+                    // Skip C/O, S/O, D/O, W/O tokens
+                    if (careOfRegex.test(token)) {
+                        startIdx++;
+                        continue;
+                    }
+                    
+                    // Skip person names (proper case alpha only, no numbers, not too short)
+                    // This catches names after C/O like "Thukalan Paulose George"
+                    if (/^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/.test(token) && 
+                        token.length > 3 && 
+                        !token.match(/\d/) &&
+                        !roadKeywordRegex.test(token)) {
+                        startIdx++;
+                        continue;
+                    }
+                    
+                    // If token survived all filters, this is the start of real address
+                    break;
                 }
 
                 /* ---------- FIND ADDRESS END (PIN location) ---------- */
