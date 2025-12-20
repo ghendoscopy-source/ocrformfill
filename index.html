@@ -784,6 +784,16 @@
                         !careOfRegex.test(l)
                     );
 
+
+const csvTokens = addressLines
+    .flatMap(line => line.split(','))   // split comma-separated OCR lines
+    .map(token => token.trim())
+    .filter(token =>
+        token &&
+        !/^address:?$/i.test(token) &&  // removes "Address" or "Address:"
+        !careOfRegex.test(token)         // removes C/O, S/O, etc
+    );
+
                 /* ---------- House & Road (strictly positional) ---------- */
 
                 document.getElementById('house').value = addressLines[0] || '';
