@@ -799,8 +799,9 @@
                         }
                     }
 
-                    /* ---------- PHASE 2: SKIP START JUNK ---------- */
+                   /* ---------- PHASE 2: SKIP START JUNK & IDENTIFY HOUSE ---------- */
                     let startIdx = 0;
+                    let houseIdentified = false;
                     const personName = document.getElementById('name').value.trim().toLowerCase();
                     
                     while (startIdx < csvTokens.length) {
@@ -818,25 +819,33 @@
                             continue;
                         }
                         
-                        // Skip C/O, S/O, D/O, W/O (with or without name)
+                        // CRITICAL: If we find C/O, S/O, D/O, W/O - next valid token after guardian name is HOUSE
                         if (/\b(c\/?o|s\/?o|d\/?o|w\/?o)\b/i.test(token)) {
                             startIdx++; // Skip C/O marker
+                            
+                            // Skip guardian name (always present after C/O)
                             if (startIdx < csvTokens.length) {
-                                startIdx++; // Skip guardian name (always present after C/O)
+                                startIdx++; // Skip guardian name
+                            }
+                            
+                            // HOUSE ANCHOR: First token after C/O + guardian = House (100% certainty)
+                            if (startIdx < csvTokens.length) {
+                                houseIdentified = true;
+                                break; // Exit - we found House position
                             }
                             continue;
                         }
                         
-                        // Skip person's own name
+                        // Skip person's own name (only if no C/O pattern detected)
                         if (personName && personName.length > 3 && 
                             (lowerToken === personName || lowerToken.includes(personName) || personName.includes(lowerToken))) {
                             startIdx++;
                             continue;
                         }
 
-                        // First valid token = House
+                        // If we reach here without C/O, this token is House
                         break;
-                    }
+                    } 
 
                     /* ---------- PHASE 3: ASSIGN HOUSE & ROAD (POSITIONAL) ---------- */
                     let house = '';
