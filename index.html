@@ -820,12 +820,12 @@
                         }
                         
                         // CRITICAL: If token CONTAINS C/O, S/O, D/O, W/O (guardian included in same token)
-// then the VERY NEXT CSV token is HOUSE (100% certainty)
-if (/\b(c\/?o|s\/?o|d\/?o|w\/?o|h\/?o)\b/i.test(token)) {
-    startIdx++; // Move to the next CSV token (this is HOUSE)
-    houseIdentified = true;
-    break; // Exit - house position fixed
-}
+                        // then the VERY NEXT CSV token is HOUSE (100% certainty)
+                        if (/\b(c\/?o|s\/?o|d\/?o|w\/?o|h\/?o)\b/i.test(token)) {
+                        startIdx++; // Move to the next CSV token (this is HOUSE)
+                        houseIdentified = true;
+                        break; // Exit - house position fixed
+                        }
 
                             
                             // Skip guardian name (always present after C/O)
