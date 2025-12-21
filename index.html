@@ -799,58 +799,50 @@
                         }
                     }
 
-                   /* ---------- PHASE 2: SKIP START JUNK & IDENTIFY HOUSE ---------- */
-                    let startIdx = 0;
-                    let houseIdentified = false;
-                    const personName = document.getElementById('name').value.trim().toLowerCase();
-                    
-                    while (startIdx < csvTokens.length) {
-                        const token = csvTokens[startIdx];
-                        if (!token || !token.trim()) {
-                            startIdx++;
-                            continue;
-                        }
-                        
-                        const lowerToken = token.toLowerCase();
-                        
-                        // Skip "To" or "Address:"
-                        if (lowerToken.includes("address") || lowerToken === "to") {
-                            startIdx++;
-                            continue;
-                        }
-                        
-                        // CRITICAL: If token CONTAINS C/O, S/O, D/O, W/O (guardian included in same token)
-                        // then the VERY NEXT CSV token is HOUSE (100% certainty)
-                        if (/\b(c\/?o|s\/?o|d\/?o|w\/?o|h\/?o)\b/i.test(token)) {
-                        startIdx++; // Move to the next CSV token (this is HOUSE)
-                        houseIdentified = true;
-                        break; // Exit - house position fixed
-                        }
+                  /* ---------- PHASE 2: SKIP START JUNK & IDENTIFY HOUSE ---------- */
+let startIdx = 0;
+let houseIdentified = false;
+const personName = document.getElementById('name').value.trim().toLowerCase();
 
-                            
-                            // Skip guardian name (always present after C/O)
-                            if (startIdx < csvTokens.length) {
-                                startIdx++; // Skip guardian name
-                            }
-                            
-                            // HOUSE ANCHOR: First token after C/O + guardian = House (100% certainty)
-                            if (startIdx < csvTokens.length) {
-                                houseIdentified = true;
-                                break; // Exit - we found House position
-                            }
-                            continue;
-                        }
-                        
-                        // Skip person's own name (only if no C/O pattern detected)
-                        if (personName && personName.length > 3 && 
-                            (lowerToken === personName || lowerToken.includes(personName) || personName.includes(lowerToken))) {
-                            startIdx++;
-                            continue;
-                        }
+while (startIdx < csvTokens.length) {
+    const token = csvTokens[startIdx];
+    if (!token || !token.trim()) {
+        startIdx++;
+        continue;
+    }
 
-                        // If we reach here without C/O, this token is House
-                        break;
-                    } 
+    const lowerToken = token.toLowerCase();
+
+    // Skip "To" or "Address:"
+    if (lowerToken.includes("address") || lowerToken === "to") {
+        startIdx++;
+        continue;
+    }
+
+    // RELATION MARKER ANCHOR:
+    // If token contains C/O, S/O, D/O, W/O, H/O,
+    // then the VERY NEXT CSV token is HOUSE (100% certainty)
+    if (/\b(c\/?o|s\/?o|d\/?o|w\/?o|h\/?o)\b/i.test(token)) {
+        startIdx++; // move to next token → HOUSE
+        houseIdentified = true;
+        break;
+    }
+
+    // Skip person's own name (only when no relation marker was hit)
+    if (
+        personName &&
+        personName.length > 3 &&
+        (lowerToken === personName ||
+         lowerToken.includes(personName) ||
+         personName.includes(lowerToken))
+    ) {
+        startIdx++;
+        continue;
+    }
+
+    // No C/O pattern → this token itself is House
+    break;
+}
 
                     /* ---------- PHASE 3: ASSIGN HOUSE & ROAD (POSITIONAL) ---------- */
                     let house = '';
