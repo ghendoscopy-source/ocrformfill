@@ -670,6 +670,12 @@
         }
         
         function parseAndFillData(text, mode) {
+            // Early validation
+            if (!text || text.trim().length < 10) {
+                showStatus('Text too short to parse - manual entry required', 'error');
+                return;
+            }
+            
             const cleanText = text.replace(/[^\x00-\x7F]/g, ' ');
             const lines = cleanText.split('\n').map(l => l.trim()).filter(l => l);
             
@@ -730,99 +736,169 @@
                 }
             } 
             else if (mode === 'address') {
-                /* ---------- CSV-FIRST PROCESSING (Aadhaar is comma-separated) ---------- */
-                
-                // Build CSV tokens from all lines (OCR may split across lines)
-                const csvTokens = lines
-                    .join(' ') // Rejoin lines that OCR split
-                    .replace(/[，﹐‚]/g, ',') // Normalize OCR comma variants
-                    .split(',')
-                    .map(t => t.trim())
-                    .filter(Boolean);
-
-                const careOfRegex = /\b(C\/O|S\/O|D\/O|W\/O)\b/i;
-                const pinRegex = /\b\d{6}\b/;
-                const mobileRegex = /\b[6-9]\d{9}\b/;
-                const poRegex = /\b(P\.?O\.?|Post Office)\b/i;
-                const roadKeywordRegex = /\b(road|rd|street|st|lane|ln|drive|dr|avenue|ave|courtyard)\b/i;
-                const adminNoiseRegex = /\b(village|taluk|taluka|district|state)\b/ig;
-
-                /* ---------- PIN & MOBILE (extract first, anywhere in tokens) ---------- */
-                
-                csvTokens.forEach(token => {
-                    const pinMatch = token.match(pinRegex);
-                    if (pinMatch) {
-                        document.getElementById('pincode').value = pinMatch[0];
-                    }
-
-                    const mobileMatch = token.match(mobileRegex);
-                    if (mobileMatch) {
-                        document.getElementById('mobile').value = mobileMatch[0];
-                    }
-                });
-                
-                // If no mobile found, set placeholder
-                if (!document.getElementById('mobile').value) {
-                    document.getElementById('mobile').value = '9999999999';
-                }
-
-                
-       /* ---------- ADDRESS PARSING (Enforced Positional Logic) ---------- */
-                let startIdx = 0;
-                const personName = document.getElementById('name').value.trim().toLowerCase();
-                
-                // 1. SKIP JUNK: Process of Elimination (Uses .includes for precision)
-                while (startIdx < csvTokens.length) {
-                    let token = csvTokens[startIdx].trim().toLowerCase();
+                try {
+                    /* ---------- CSV-FIRST PROCESSING (Aadhaar is comma-separated) ---------- */
                     
-                    if (!token) {
-                        startIdx++;
-                        continue;
+                    // Build CSV tokens from all lines (OCR may split across lines)
+                    const csvTokens = lines
+                        .join(' ') // Rejoin lines that OCR split
+                        .replace(/[，﹐‚]/g, ',') // Normalize OCR comma variants
+                        .split(',')
+                        .map(t => t ? t.trim() : '')
+                        .filter(Boolean);
+
+                    if (csvTokens.length === 0) {
+                        showStatus('Could not parse address - please enter manually', 'error');
+                        return;
                     }
 
-                    // Precise Exclusion A: Skip if segment contains "Address" or "To" anywhere
-                    if (token.includes("address") || token.includes("to")) {
-                        startIdx++;
-                        continue;
+                    const pinRegex = /\b\d{6}\b/;
+                    const mobileRegex = /\b[6-9]\d{9}\b/;
+                    const poRegex = /\b(P\.?O\.?|Post Office)\b/i;
+                    const roadKeywordRegex = /\b(road|rd|street|st|lane|ln|drive|dr|avenue|ave|marg)\b/i;
+                    const buildingKeywordRegex = /\b(courtyard|apartment|apartments|complex|tower|towers|residency)\b/i;
+
+                    /* ---------- PHASE 1: EXTRACT DEFINITE ANCHORS ---------- */
+                    
+                    // PIN Code (100% certainty)
+                    let pincode = '';
+                    let pinIndex = -1;
+                    const pinMatches = csvTokens.filter(t => pinRegex.test(t));
+                    
+                    if (pinMatches.length === 1) {
+                        const pinMatch = pinMatches[0].match(pinRegex);
+                        pincode = pinMatch[0];
+                        pinIndex = csvTokens.findIndex(t => pinRegex.test(t));
+                        document.getElementById('pincode').value = pincode;
+                    } else {
+                        document.getElementById('pincode').value = '';
+                    }
+
+                    // Mobile (100% certainty)
+                    let mobile = '';
+                    const mobileMatches = csvTokens.filter(t => mobileRegex.test(t));
+                    
+                    if (mobileMatches.length === 1) {
+                        const mobileMatch = mobileMatches[0].match(mobileRegex);
+                        mobile = mobileMatch[0];
+                        document.getElementById('mobile').value = mobile;
+                    } else {
+                        document.getElementById('mobile').value = '';
+                    }
+
+                    // PO: Town (100% certainty when present)
+                    let poTown = '';
+                    const poIndex = csvTokens.findIndex(t => poRegex.test(t));
+                    if (poIndex !== -1 && poIndex + 1 < csvTokens.length) {
+                        const poToken = csvTokens[poIndex];
+                        const afterColon = poToken.split(':')[1];
+                        if (afterColon && afterColon.trim()) {
+                            poTown = afterColon.trim();
+                        } else if (poIndex + 1 < csvTokens.length) {
+                            poTown = csvTokens[poIndex + 1].trim();
+                        }
+                    }
+
+                    /* ---------- PHASE 2: SKIP START JUNK ---------- */
+                    let startIdx = 0;
+                    const personName = document.getElementById('name').value.trim().toLowerCase();
+                    
+                    while (startIdx < csvTokens.length) {
+                        const token = csvTokens[startIdx];
+                        if (!token || !token.trim()) {
+                            startIdx++;
+                            continue;
+                        }
+                        
+                        const lowerToken = token.toLowerCase();
+                        
+                        // Skip "To" or "Address:"
+                        if (lowerToken.includes("address") || lowerToken === "to") {
+                            startIdx++;
+                            continue;
+                        }
+                        
+                        // Skip C/O, S/O, D/O, W/O (with or without name)
+                        if (/\b(c\/?o|s\/?o|d\/?o|w\/?o)\b/i.test(token)) {
+                            startIdx++; // Skip C/O marker
+                            if (startIdx < csvTokens.length) {
+                                startIdx++; // Skip guardian name (always present after C/O)
+                            }
+                            continue;
+                        }
+                        
+                        // Skip person's own name
+                        if (personName && personName.length > 3 && 
+                            (lowerToken === personName || lowerToken.includes(personName) || personName.includes(lowerToken))) {
+                            startIdx++;
+                            continue;
+                        }
+
+                        // First valid token = House
+                        break;
+                    }
+
+                    /* ---------- PHASE 3: ASSIGN HOUSE & ROAD (POSITIONAL) ---------- */
+                    let house = '';
+                    let road = '';
+                    
+                    if (startIdx < csvTokens.length) {
+                        house = csvTokens[startIdx].trim();
+                        
+                        if (startIdx + 1 < csvTokens.length) {
+                            const roadCandidate = csvTokens[startIdx + 1].trim();
+                            
+                            // Validation: If contains building keywords, likely wrong - blank it
+                            if (buildingKeywordRegex.test(roadCandidate.toLowerCase())) {
+                                road = '';
+                            } else {
+                                road = roadCandidate;
+                            }
+                        }
                     }
                     
-                    // Precise Exclusion B: Skip if segment contains C/O, S/O, D/O, W/O anywhere
-                    // Matches "C/O Name", "C/O:Name", "CIO", etc.
-                    if (/\b(c\/?o|s\/?o|d\/?o|w\/?o|care|son|daughter|wife|cio|sio)\b/i.test(token)) {
-                        startIdx++;
-                        continue;
+                    document.getElementById('house').value = house;
+                    document.getElementById('road').value = road;
+
+                    /* ---------- PHASE 4: TOWN (BACKWARD FROM PIN) ---------- */
+                    let town = '';
+                    
+                    // Priority 1: PO: identifier (100% certainty)
+                    if (poTown) {
+                        town = poTown;
+                    }
+                    // Priority 2: PIN-3 backward count
+                    else if (pinIndex >= 3) {
+                        const townCandidate = csvTokens[pinIndex - 3];
+                        const stateCandidate = csvTokens[pinIndex - 1];
+                        
+                        // Validation: State should be "Kerala"
+                        if (stateCandidate && stateCandidate.toLowerCase().includes('kerala')) {
+                            town = townCandidate ? townCandidate.trim() : '';
+                        } else {
+                            // Pattern broken, leave blank
+                            town = '';
+                        }
                     }
                     
-                    // Precise Exclusion C: Skip the person's own name
-                    if (personName && (token === personName || personName.includes(token) || token.includes(personName)) && token.length > 3) {
-                        startIdx++;
-                        continue;
+                    document.getElementById('town').value = town;
+
+                    /* ---------- STATUS REPORT ---------- */
+                    const filled = [house, road, town, pincode, mobile].filter(v => v !== '').length;
+                    const total = 5;
+                    
+                    if (filled === total) {
+                        showStatus(`✓ All ${total} address fields extracted successfully!`, 'success');
+                    } else if (filled > 0) {
+                        showStatus(`⚠ ${filled}/${total} fields extracted. Please fill remaining fields manually.`, 'info');
+                    } else {
+                        showStatus(`❌ Could not extract address data. Please enter manually.`, 'error');
                     }
-
-                    // If it survived, this index is the HOUSE
-                    break;
+                    
+                } catch (error) {
+                    console.error('Address parsing error:', error);
+                    showStatus('Address parsing failed - please enter manually', 'error');
                 }
-
-                // 2. ASSIGN HOUSE & ROAD (Strictly Positional)
-                let house = (startIdx < csvTokens.length) ? csvTokens[startIdx].trim() : "";
-                let road = (startIdx + 1 < csvTokens.length) ? csvTokens[startIdx + 1].trim() : "";
-
-                document.getElementById('house').value = house;
-                document.getElementById('road').value = road;
-
-                /* ---------- TOWN (Bottom-Up Logic) ---------- */
-                let town = '';
-                const pinIdx = csvTokens.findIndex(t => pinRegex.test(t));
-                
-                if (pinIdx !== -1) {
-                    const remainingIdx = startIdx + 2; 
-                    if (remainingIdx < pinIdx) {
-                        const townParts = csvTokens.slice(remainingIdx, pinIdx);
-                        // Take last 2 segments before PIN
-                        town = townParts.slice(-2).join(', ').trim();
-                    }
-                }
-                document.getElementById('town').value = town;
             }
         }
         
