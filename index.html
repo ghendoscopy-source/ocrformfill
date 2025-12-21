@@ -860,24 +860,49 @@
                     document.getElementById('house').value = house;
                     document.getElementById('road').value = road;
 
-                    /* ---------- PHASE 4: TOWN (BACKWARD FROM PIN) ---------- */
+                   /* ---------- PHASE 4: TOWN (BACKWARD FROM PIN) ---------- */
                     let town = '';
                     
                     // Priority 1: PO: identifier (100% certainty)
                     if (poTown) {
                         town = poTown;
                     }
-                    // Priority 2: PIN-3 backward count
-                    else if (pinIndex >= 3) {
-                        const townCandidate = csvTokens[pinIndex - 3];
-                        const stateCandidate = csvTokens[pinIndex - 1];
+                    // Priority 2: Combine last 2-3 tokens before PIN (after removing qualifiers)
+                    else if (pinIndex >= 1) {
+                        // Collect tokens before PIN
+                        const tokensBeforePin = [];
                         
-                        // Validation: State should be "Kerala"
-                        if (stateCandidate && stateCandidate.toLowerCase().includes('kerala')) {
-                            town = townCandidate ? townCandidate.trim() : '';
-                        } else {
-                            // Pattern broken, leave blank
-                            town = '';
+                        // Go backwards from PIN, collect up to 3 tokens
+                        for (let i = pinIndex - 1; i >= Math.max(0, pinIndex - 3); i--) {
+                            const token = csvTokens[i];
+                            if (!token) continue;
+                            
+                            const lowerToken = token.toLowerCase();
+                            
+                            // Skip qualifiers: PO, District, Dist, State, Kerala, Village, Taluk
+                            if (lowerToken.includes('p.o') || 
+                                lowerToken.includes('po:') ||
+                                lowerToken.includes('post office') ||
+                                lowerToken.includes('district') ||
+                                lowerToken.includes('dist:') ||
+                                lowerToken.includes('dist.') ||
+                                lowerToken.includes('state') ||
+                                lowerToken === 'kerala' ||
+                                lowerToken.includes('village') ||
+                                lowerToken.includes('taluk') ||
+                                lowerToken.includes('taluka') ||
+                                lowerToken.includes('sub district') ||
+                                lowerToken.includes('vtc')) {
+                                continue;
+                            }
+                            
+                            // Valid token - add to beginning of array (since we're going backwards)
+                            tokensBeforePin.unshift(token.trim());
+                        }
+                        
+                        // Combine collected tokens with comma separator
+                        if (tokensBeforePin.length > 0) {
+                            town = tokensBeforePin.join(', ');
                         }
                     }
                     
