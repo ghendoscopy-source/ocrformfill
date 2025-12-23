@@ -873,8 +873,6 @@ function cleanAddressText(rawText) {
  
                     }
                     
-                    document.getElementById('house').value = house;
-                    document.getElementById('road').value = road;
 
                    /* ---------- PHASE 4: TOWN (BACKWARD FROM PIN) ---------- */
                     let town = '';
@@ -922,26 +920,6 @@ function cleanAddressText(rawText) {
                         }
                     }
                     
-                    document.getElementById('town').value = town;
-
-                    /* ---------- STATUS REPORT ---------- */
-                    const filled = [house, road, town, pincode, mobile].filter(v => v !== '').length;
-                    const total = 5;
-                    
-                    if (filled === total) {
-                        showStatus(`✓ All ${total} address fields extracted successfully!`, 'success');
-                    } else if (filled > 0) {
-                        showStatus(`⚠ ${filled}/${total} fields extracted. Please fill remaining fields manually.`, 'info');
-                    } else {
-                        showStatus(`❌ Could not extract address data. Please enter manually.`, 'error');
-                    }
-                    
-                } catch (error) {
-                    console.error('Address parsing error:', error);
-                    showStatus('Address parsing failed - please enter manually', 'error');
-                }
-            }
-        }
         
         function showStatus(message, type) {
             status.textContent = message;
