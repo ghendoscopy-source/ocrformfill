@@ -669,50 +669,7 @@
             }
         }
         
-        /* ================= ADDRESS PREPROCESSING HELPERS ================= */
-
-const RELATION_REGEX = /\b(c\/o|s\/o|d\/o|w\/o|h\/o)\b/i;
-const HEADER_REGEX = /\b(address|to|name|recipient|holder)\b\s*[:\-]*/i;
-
-function cleanAddressText(rawText) {
-    // Split loosely to detect C/O line
-    const lines = rawText
-        .replace(/[^\x20-\x7E]/g, ' ')   // remove non-English
-        .split(/\n|,/)
-        .map(l => l.trim())
-        .filter(Boolean);
-
-    // 1️⃣ If C/O exists → discard everything ABOVE it
-    let startIndex = 0;
-    for (let i = 0; i < lines.length; i++) {
-        if (RELATION_REGEX.test(lines[i])) {
-            startIndex = i + 1; // start AFTER C/O
-            break;
-        }
-    }
-
-    const relevantLines = lines.slice(startIndex).join(', ');
-
-    return relevantLines
-        // Remove C/O remnants if any
-        .replace(/\b(c\/o|s\/o|d\/o|w\/o|h\/o)\b[^,]*/gi, ' ')
-        // Remove headers if no C/O existed
-        .replace(HEADER_REGEX, ' ')
-        // Remove Aadhaar numbers
-        .replace(/\b\d{4}\s?\d{4}\s?\d{4}\b/g, ' ')
-        .replace(/\b\d{12}\b/g, ' ')
-        // Remove admin junk
-        .replace(/\bUIDAI\b/gi, ' ')
-        .replace(/\bGovernment of India\b/gi, ' ')
-        // Normalize punctuation
-        .replace(/[|;]/g, ',')
-        .replace(/\s*,\s*/g, ', ')
-        .replace(/\s+/g, ' ')
-        .trim();
-}
-
-/* ================= END HELPERS ================= */
-
+       
         
         function parseAndFillData(text, mode) {
             // Early validation
@@ -780,146 +737,135 @@ function cleanAddressText(rawText) {
                     document.getElementById('name').value = nameLine;
                 }
             } 
-           else if (mode === 'address') {
-    try {
-        /* ================= CLEAN ADDRESS TEXT ================= */
+   
 
-        const cleanText = cleanAddressText(text);
+            /* ================= ADDRESS RULE ENGINE (FINAL) ================= */
 
-        const tokens = cleanText
-            .split(',')
-            .map(t => t.trim())
-            .filter(Boolean);
+/* ---------- POSITIVE IDENTIFIERS (100% CERTAIN) ---------- */
+const POSITIVE = {
+    PIN: /\b\d{6}\b/,   // Aadhaar PIN – exactly 6 digits
 
-        /* ================= PIN & MOBILE (100%) ================= */
+    PO: /\bP\.?\s*O\.?\s*[:\-]?\s*([A-Za-z ]{3,})/i,
 
-        const pinMatch = cleanText.match(/\b\d{6}\b/);
-        const pincode = pinMatch ? pinMatch[0] : '';
-        document.getElementById('pincode').value = pincode;
+    HOUSE: /\b(
+        house|
+        h\.?\s*no|
+        door\s*no|
+        d\.?\s*no|
+        no\.|
+        villa|
+        cottage|
+        apartment|
+        apt\.?|
+        flat|
+        block|
+        building|
+        bldg\.?
+    )\b/i,
 
-        const mobileMatch = cleanText.match(/\b[6-9]\d{9}\b/);
-        document.getElementById('mobile').value = mobileMatch ? mobileMatch[0] : '';
+    ROAD: /\b(
+        road|rd\.?|
+        street|st\.?|
+        lane|ln\.?|
+        drive|dr\.?|
+        avenue|ave\.?|
+        marg|
+        path|
+        nagar|
+        layout|
+        cross
+    )\b/i
+};
 
-        /* ================= TOWN ================= */
+/* ---------- NEGATIVE / JUNK IDENTIFIERS (100% CERTAIN) ---------- */
+const NEGATIVE = {
+    RELATION: /\b(c\/o|s\/o|d\/o|w\/o|h\/o)\b/i,
+    ADDRESS_HDR: /\b(address|to)\b\s*[:\-]?/i
+};
 
-        let town = '';
-
-        // PO = absolute certainty
-        const poMatch = cleanText.match(/\bP\.?O\.?\s*[:\-]?\s*([A-Za-z ]{3,})/i);
-        if (poMatch) {
-            town = poMatch[1].trim();
-        }
-
-        // Fallback: −1 −2 −3 before PIN (skip junk)
-        if (!town && pinMatch) {
-            const pinIndex = tokens.findIndex(t => t.includes(pincode));
-            const junk = /district|dist|state|kerala|india|village|taluk|vtc/i;
-
-            const candidates = [];
-            for (let i = pinIndex - 1; i >= 0 && candidates.length < 3; i--) {
-                if (!junk.test(tokens[i])) {
-                    candidates.unshift(tokens[i]);
-                }
-            }
-
-            if (candidates.length) {
-                town = candidates.join(', ');
-            }
-        }
-
-        document.getElementById('town').value = town;
-
-        /* ================= HOUSE & ROAD ================= */
-
-        const HOUSE_REGEX = /\b(house|h\.?no|door|d\.?no|no\.)\b/i;
-        const ROAD_REGEX = /\b(road|rd|street|st|lane|ln|avenue|ave|marg|path|nagar)\b/i;
-
-        let house = '';
-        let road = '';
-
-        // Keyword-first (high certainty)
-        for (const t of tokens) {
-            if (!house && HOUSE_REGEX.test(t)) {
-                house = t;
-                continue;
-            }
-            if (!road && ROAD_REGEX.test(t)) {
-                road = t;
-            }
-        }
-
-        // Positional fallback (safe because headers/C-O removed)
-        if (!house && tokens[0]) house = tokens[0];
-        if (!road && tokens[1]) road = tokens[1];
-
-        document.getElementById('house').value = house;
-        document.getElementById('road').value = road;
-
-        /* ================= STATUS ================= */
-
-        const filled = [house, road, town, pincode].filter(Boolean).length;
-
-        if (filled >= 3) {
-            showStatus('✓ Address extracted successfully. Please review.', 'success');
-        } else {
-            showStatus('⚠ Partial address extracted. Please complete manually.', 'info');
-        }
-
-    } catch (err) {
-        console.error(err);
-        showStatus('Address parsing failed. Please enter manually.', 'error');
-    }
+/* ---------- TOKENIZER ---------- */
+function tokenizeAddress(text, personName = '') {
+    return text
+        .replace(/[^\x20-\x7E]/g, ' ')
+        .split(/[,|\n]/)
+        .map(t => t.trim())
+        .filter(t =>
+            t &&
+            !NEGATIVE.RELATION.test(t) &&
+            !NEGATIVE.ADDRESS_HDR.test(t) &&
+            (!personName || !t.toLowerCase().includes(personName.toLowerCase()))
+        );
 }
- 
-                    }
-                    
 
-                   /* ---------- PHASE 4: TOWN (BACKWARD FROM PIN) ---------- */
-                    let town = '';
-                    
-                    // Priority 1: PO: identifier (100% certainty)
-                    if (poTown) {
-                        town = poTown;
-                    }
-                    // Priority 2: Combine last 2-3 tokens before PIN (after removing qualifiers)
-                    else if (pinIndex >= 1) {
-                        // Collect tokens before PIN
-                        const tokensBeforePin = [];
-                        
-                        // Go backwards from PIN, collect up to 3 tokens
-                        for (let i = pinIndex - 1; i >= Math.max(0, pinIndex - 3); i--) {
-                            const token = csvTokens[i];
-                            if (!token) continue;
-                            
-                            const lowerToken = token.toLowerCase();
-                            
-                            // Skip qualifiers: PO, District, Dist, State, Kerala, Village, Taluk
-                            if (lowerToken.includes('p.o') || 
-                                lowerToken.includes('po:') ||
-                                lowerToken.includes('post office') ||
-                                lowerToken.includes('district') ||
-                                lowerToken.includes('dist:') ||
-                                lowerToken.includes('dist.') ||
-                                lowerToken.includes('state') ||
-                                lowerToken === 'kerala' ||
-                                lowerToken.includes('village') ||
-                                lowerToken.includes('taluk') ||
-                                lowerToken.includes('taluka') ||
-                                lowerToken.includes('sub district') ||
-                                lowerToken.includes('vtc')) {
-                                continue;
-                            }
-                            
-                            // Valid token - add to beginning of array (since we're going backwards)
-                            tokensBeforePin.unshift(token.trim());
-                        }
-                        
-                        // Combine collected tokens with comma separator
-                        if (tokensBeforePin.length > 0) {
-                            town = tokensBeforePin.join(', ');
-                        }
-                    }
-                    
+/* ---------- MAIN ADDRESS FUNCTION ---------- */
+function extractAddress(text, personName = '') {
+
+    const tokens = tokenizeAddress(text, personName);
+
+    let house = '';
+    let road = '';
+    let town = '';
+    let pincode = '';
+
+    /* ===== PIN CODE (ABSOLUTE ANCHOR) ===== */
+    const pinMatch = text.match(POSITIVE.PIN);
+    if (pinMatch) {
+        pincode = pinMatch[0];
+    }
+
+    /* ===== PO (ABSOLUTE TOWN OVERRIDE) ===== */
+    const poMatch = text.match(POSITIVE.PO);
+    if (poMatch) {
+        town = poMatch[1].trim();
+    }
+
+    /* ===== HOUSE (KEYWORD / SYNONYM ONLY) ===== */
+    for (const t of tokens) {
+        if (POSITIVE.HOUSE.test(t)) {
+            house = t;
+            break;
+        }
+    }
+
+    /* ===== ROAD (KEYWORD ONLY) ===== */
+    for (const t of tokens) {
+        if (POSITIVE.ROAD.test(t)) {
+            road = t;
+            break;
+        }
+    }
+
+    /* ===== TOWN (PIN-RELATIVE, PO ABSENT) ===== */
+    if (!town && pincode) {
+        const pinIndex = tokens.findIndex(t => t.includes(pincode));
+        if (pinIndex > 0) {
+            const start = Math.max(0, pinIndex - 3);
+            town = tokens.slice(start, pinIndex).join(', ');
+        }
+    }
+
+    return {
+        house: house || '',
+        road: road || '',
+        town: town || '',
+        pincode: pincode || ''
+    };
+}
+
+/* ---------- APPLY TO FORM (NO OVERRIDES) ---------- */
+function fillAddressFields(ocrText) {
+
+    const personName = document.getElementById('name')?.value || '';
+    const result = extractAddress(ocrText, personName);
+
+    document.getElementById('house').value   = result.house;
+    document.getElementById('road').value    = result.road;
+    document.getElementById('town').value    = result.town;
+    document.getElementById('pincode').value = result.pincode;
+}
+
+/* ================= END ADDRESS BLOCK ================= */
+
         
         function showStatus(message, type) {
             status.textContent = message;
