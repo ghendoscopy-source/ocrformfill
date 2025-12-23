@@ -748,37 +748,9 @@
 /* ---------- POSITIVE IDENTIFIERS (100% CERTAIN) ---------- */
 const POSITIVE = {
     PIN: /\b\d{6}\b/,   // Aadhaar PIN – exactly 6 digits
-
     PO: /\bP\.?\s*O\.?\s*[:\-]?\s*([A-Za-z ]{3,})/i,
-
-    HOUSE: /\b(
-        house|
-        h\.?\s*no|
-        door\s*no|
-        d\.?\s*no|
-        no\.|
-        villa|
-        cottage|
-        apartment|
-        apt\.?|
-        flat|
-        block|
-        building|
-        bldg\.?
-    )\b/i,
-
-    ROAD: /\b(
-        road|rd\.?|
-        street|st\.?|
-        lane|ln\.?|
-        drive|dr\.?|
-        avenue|ave\.?|
-        marg|
-        path|
-        nagar|
-        layout|
-        cross
-    )\b/i
+    HOUSE: /\b(house|h\.?\s*no|door\s*no|d\.?\s*no|no\.|villa|cottage|apartment|apt\.?|flat|block|building|bldg\.?)\b/i,
+    ROAD: /\b(road|rd\.?|street|st\.?|lane|ln\.?|drive|dr\.?|avenue|ave\.?|marg|path|nagar|layout|cross)\b/i
 };
 
 /* ---------- NEGATIVE / JUNK IDENTIFIERS (100% CERTAIN) ---------- */
@@ -786,6 +758,7 @@ const NEGATIVE = {
     RELATION: /\b(c\/o|s\/o|d\/o|w\/o|h\/o)\b/i,
     ADDRESS_HDR: /\b(address|to)\b\s*[:\-]?/i
 };
+
 
 /* ---------- TOKENIZER ---------- */
 function tokenizeAddress(text, personName = '') {
