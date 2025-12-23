@@ -669,6 +669,51 @@
             }
         }
         
+        /* ================= ADDRESS PREPROCESSING HELPERS ================= */
+
+const RELATION_REGEX = /\b(c\/o|s\/o|d\/o|w\/o|h\/o)\b/i;
+const HEADER_REGEX = /\b(address|to|name|recipient|holder)\b\s*[:\-]*/i;
+
+function cleanAddressText(rawText) {
+    // Split loosely to detect C/O line
+    const lines = rawText
+        .replace(/[^\x20-\x7E]/g, ' ')   // remove non-English
+        .split(/\n|,/)
+        .map(l => l.trim())
+        .filter(Boolean);
+
+    // 1️⃣ If C/O exists → discard everything ABOVE it
+    let startIndex = 0;
+    for (let i = 0; i < lines.length; i++) {
+        if (RELATION_REGEX.test(lines[i])) {
+            startIndex = i + 1; // start AFTER C/O
+            break;
+        }
+    }
+
+    const relevantLines = lines.slice(startIndex).join(', ');
+
+    return relevantLines
+        // Remove C/O remnants if any
+        .replace(/\b(c\/o|s\/o|d\/o|w\/o|h\/o)\b[^,]*/gi, ' ')
+        // Remove headers if no C/O existed
+        .replace(HEADER_REGEX, ' ')
+        // Remove Aadhaar numbers
+        .replace(/\b\d{4}\s?\d{4}\s?\d{4}\b/g, ' ')
+        .replace(/\b\d{12}\b/g, ' ')
+        // Remove admin junk
+        .replace(/\bUIDAI\b/gi, ' ')
+        .replace(/\bGovernment of India\b/gi, ' ')
+        // Normalize punctuation
+        .replace(/[|;]/g, ',')
+        .replace(/\s*,\s*/g, ', ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/* ================= END HELPERS ================= */
+
+        
         function parseAndFillData(text, mode) {
             // Early validation
             if (!text || text.trim().length < 10) {
