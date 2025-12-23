@@ -534,7 +534,6 @@
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.drawImage(img, x, y, w, h, 0, 0, w, h);
 
-            preprocessImage(tempCanvas);
             await performOCR(tempCanvas, selectionMode);
         });
         
@@ -632,7 +631,6 @@
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.drawImage(img, x, y, w, h, 0, 0, w, h);
 
-            preprocessImage(tempCanvas);
             await performOCR(tempCanvas, selectionMode);
         });
         
