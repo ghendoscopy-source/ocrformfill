@@ -764,6 +764,7 @@ const NEGATIVE = {
 };
 
 /* ---------- TOKENIZER (FILTER NEGATIVES AT SOURCE) ---------- */
+
 function tokenizeAddress(text, personName = '') {
     return text
         .replace(/[^\x20-\x7E]/g, ' ')
@@ -799,16 +800,14 @@ function extractAddress(text, personName = '') {
     if (roadIndex  !== -1) road  = tokens[roadIndex];
 
     /* ---------- SECONDARY: PAIR COMPLETION ---------- */
-    if (house && !road) {
-        if (tokens[houseIndex + 1] && !/\d{6}/.test(tokens[houseIndex + 1])) {
-            road = tokens[houseIndex + 1];
-        }
+    if (house && !road && houseIndex !== -1) {
+        const next = tokens[houseIndex + 1];
+        if (next && !/\d{6}/.test(next)) road = next;
     }
 
-    if (road && !house) {
-        if (tokens[roadIndex - 1] && !/\d{6}/.test(tokens[roadIndex - 1])) {
-            house = tokens[roadIndex - 1];
-        }
+    if (road && !house && roadIndex !== -1) {
+        const prev = tokens[roadIndex - 1];
+        if (prev && !/\d{6}/.test(prev)) house = prev;
     }
 
     /* ---------- SECONDARY: C/O FALLBACK ---------- */
@@ -822,14 +821,11 @@ function extractAddress(text, personName = '') {
 
     /* ---------- TOWN: PO OVERRIDE ---------- */
     const poMatch = text.match(POSITIVE.PO);
-    if (poMatch) {
-        town = poMatch[1].trim();
-    }
+    if (poMatch) town = poMatch[1].trim();
 
     /* ---------- TOWN: PIN-RELATIVE (MANDATORY) ---------- */
     if (!town && pincode) {
         const pinIndex = tokens.findIndex(t => t.includes(pincode));
-
         if (pinIndex !== -1) {
             const candidates = tokens
                 .slice(Math.max(0, pinIndex - 5), pinIndex)
@@ -841,9 +837,7 @@ function extractAddress(text, personName = '') {
                     !NEGATIVE.ADMIN.test(t)
                 );
 
-            if (candidates.length) {
-                town = candidates[0];
-            }
+            if (candidates.length) town = candidates[0];
         }
     }
 
@@ -864,6 +858,19 @@ function extractAddress(text, personName = '') {
     return { house, road, town, pincode };
 }
 
+/* ---------- MOBILE (ADDRESS BLOCK ONLY) ---------- */
+function extractMobileFromAddress(text) {
+    const pinMatch = text.match(/\b\d{6}\b/);
+    if (!pinMatch) return '';
+
+    const pinPos = text.indexOf(pinMatch[0]);
+    if (pinPos === -1) return '';
+
+    const afterPin = text.slice(pinPos + 6);
+    const mobileMatch = afterPin.match(/\b[6-9]\d{9}\b/);
+    return mobileMatch ? mobileMatch[0] : '';
+}
+
 /* ---------- APPLY TO FORM (NO OVERRIDES) ---------- */
 function fillAddressFields(ocrText) {
     const personName = document.getElementById('name')?.value || '';
@@ -873,6 +880,13 @@ function fillAddressFields(ocrText) {
     if (r.road)    document.getElementById('road').value    = r.road;
     if (r.town)    document.getElementById('town').value    = r.town;
     if (r.pincode) document.getElementById('pincode').value = r.pincode;
+
+    /* ---------- MOBILE WITH SENTINEL ---------- */
+    const mobileField = document.getElementById('mobile');
+    if (mobileField && !mobileField.value) {
+        const mobile = extractMobileFromAddress(ocrText);
+        mobileField.value = mobile || '9999999999';
+    }
 }
 
 /* ================= END ADDRESS RULE ENGINE ================= */
