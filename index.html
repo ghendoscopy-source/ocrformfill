@@ -649,13 +649,15 @@
                     }
                 });
                 
-                await worker.setParameters({
-                    tessedit_char_whitelist: mode === 'identity' ? 
-                        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ./:-' :
-                        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,/:-',
-                    tessedit_pageseg_mode: Tesseract.PSM.AUTO,
-                    preserve_interword_spaces: '1',
-                });
+               await worker.setParameters({
+               tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+               tessedit_char_whitelist:
+               mode === 'identity'
+            ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ./:-'
+            : 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,/:-',
+              preserve_interword_spaces: '1',
+              });
+
                 
                 const { data: { text } } = await worker.recognize(canvas);
                 await worker.terminate();
