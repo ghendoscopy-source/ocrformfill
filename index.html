@@ -763,8 +763,7 @@ const NEGATIVE = {
     ADMIN: /\b(district|dist\.?|taluk|taluka|tq\.?|tehsil|state|pin\s*code)\b/i
 };
 
-/* ---------- TOKENIZER (FILTER NEGATIVES AT SOURCE) ---------- */
-
+/* ---------- TOKENIZER ---------- */
 function tokenizeAddress(text, personName = '') {
     return text
         .replace(/[^\x20-\x7E]/g, ' ')
@@ -888,6 +887,7 @@ function fillAddressFields(ocrText) {
         mobileField.value = mobile || '9999999999';
     }
 }
+
 
 /* ================= END ADDRESS RULE ENGINE ================= */
 
