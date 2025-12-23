@@ -783,59 +783,82 @@ function extractAddress(text, personName = '') {
     const tokens = tokenizeAddress(text, personName);
 
     let house = '';
-    let road  = '';
-    let town  = '';
+    let road = '';
+    let town = '';
     let pincode = '';
 
-    /* PIN — ABSOLUTE ANCHOR */
+    /* ---------- PIN (ABSOLUTE ANCHOR) ---------- */
     const pinMatch = text.match(POSITIVE.PIN);
     if (pinMatch) pincode = pinMatch[0];
 
-    /* 1️⃣ POSITIVE IDENTIFICATION FIRST */
+    /* ---------- PRIMARY IDENTIFICATION ---------- */
     const houseIndex = tokens.findIndex(t => POSITIVE.HOUSE.test(t));
     const roadIndex  = tokens.findIndex(t => POSITIVE.ROAD.test(t));
 
-    if (houseIndex !== -1) {
-        house = tokens[houseIndex];
-        if (!road && tokens[houseIndex + 1]) {
+    if (houseIndex !== -1) house = tokens[houseIndex];
+    if (roadIndex  !== -1) road  = tokens[roadIndex];
+
+    /* ---------- SECONDARY: PAIR COMPLETION ---------- */
+    if (house && !road) {
+        if (tokens[houseIndex + 1] && !/\d{6}/.test(tokens[houseIndex + 1])) {
             road = tokens[houseIndex + 1];
         }
     }
 
-    if (roadIndex !== -1) {
-        road = tokens[roadIndex];
-        if (!house && tokens[roadIndex - 1]) {
+    if (road && !house) {
+        if (tokens[roadIndex - 1] && !/\d{6}/.test(tokens[roadIndex - 1])) {
             house = tokens[roadIndex - 1];
         }
     }
 
-    /* 2️⃣ C/O FALLBACK (NAME AWARE) */
+    /* ---------- SECONDARY: C/O FALLBACK ---------- */
     if (!house || !road) {
         const relIndex = tokens.findIndex(t => NEGATIVE.RELATION.test(t));
         if (relIndex !== -1) {
-            // relIndex + 1 = name → skip
             if (!house && tokens[relIndex + 2]) house = tokens[relIndex + 2];
             if (!road  && tokens[relIndex + 3]) road  = tokens[relIndex + 3];
         }
     }
 
-    /* 3️⃣ TOWN — PO OVERRIDES */
+    /* ---------- TOWN: PO OVERRIDE ---------- */
     const poMatch = text.match(POSITIVE.PO);
     if (poMatch) {
         town = poMatch[1].trim();
     }
 
-    /* 4️⃣ TOWN — PIN RELATIVE (-1, -2, -3) */
+    /* ---------- TOWN: PIN-RELATIVE (MANDATORY) ---------- */
     if (!town && pincode) {
         const pinIndex = tokens.findIndex(t => t.includes(pincode));
-        town = tokens
-            .slice(Math.max(0, pinIndex - 3), pinIndex)
+
+        if (pinIndex !== -1) {
+            const candidates = tokens
+                .slice(Math.max(0, pinIndex - 5), pinIndex)
+                .reverse()
+                .filter(t =>
+                    t !== house &&
+                    t !== road &&
+                    /^[A-Za-z\s]{3,}$/.test(t) &&
+                    !NEGATIVE.ADMIN.test(t)
+                );
+
+            if (candidates.length) {
+                town = candidates[0];
+            }
+        }
+    }
+
+    /* ---------- TOWN: FINAL FALLBACK ---------- */
+    if (!town) {
+        const fallback = tokens
             .filter(t =>
+                /^[A-Za-z\s]{3,}$/.test(t) &&
                 t !== house &&
                 t !== road &&
-                !/\d/.test(t)
+                !NEGATIVE.ADMIN.test(t)
             )
-            .join(', ');
+            .slice(-1);
+
+        if (fallback.length) town = fallback[0];
     }
 
     return { house, road, town, pincode };
