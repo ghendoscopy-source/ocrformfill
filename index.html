@@ -637,6 +637,7 @@
         });
         
         async function performOCR(canvas, mode) {
+            preprocessImage(canvas);
             progressBar.style.display = 'block';
             showStatus(`Processing ${mode} block...`, 'info');
             
