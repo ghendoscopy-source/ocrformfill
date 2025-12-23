@@ -728,20 +728,25 @@
                 }
                 
                 // Extract Name
-                const nameLine = filteredIdentityLines.find(l => 
-                    l.length > 3 && 
-                    /^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/.test(l) &&
-                    !l.match(/\d/)
-                );
-                if (nameLine) {
-                    document.getElementById('name').value = nameLine;
-                }
-   
-                else if (mode === 'address') {
-                fillAddressFields(text);
-            }
+const nameLine = filteredIdentityLines.find(l => 
+    l.length > 3 && 
+    /^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/.test(l) &&
+    !l.match(/\d/)
+);
 
-            /* ================= ADDRESS RULE ENGINE (REPLACEMENT) ================= */
+if (nameLine) {
+    document.getElementById('name').value = nameLine;
+}
+}  // <-- closes: if (mode === 'identity')
+
+else if (mode === 'address') {
+    fillAddressFields(text);
+}
+}  // <-- closes: function parseAndFillData
+
+
+/* ================= ADDRESS RULE ENGINE (REPLACEMENT) ================= */
+
 
 /* ---------- POSITIVE IDENTIFIERS ---------- */
 const POSITIVE = {
