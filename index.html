@@ -742,24 +742,24 @@
             }
         }
 
-            /* ================= ADDRESS RULE ENGINE (FINAL) ================= */
+            /* ================= ADDRESS RULE ENGINE (REPLACEMENT) ================= */
 
-/* ---------- POSITIVE IDENTIFIERS (100% CERTAIN) ---------- */
+/* ---------- POSITIVE IDENTIFIERS ---------- */
 const POSITIVE = {
-    PIN: /\b\d{6}\b/,   // Aadhaar PIN – exactly 6 digits
+    PIN: /\b\d{6}\b/,
     PO: /\bP\.?\s*O\.?\s*[:\-]?\s*([A-Za-z ]{3,})/i,
     HOUSE: /\b(house|h\.?\s*no|door\s*no|d\.?\s*no|no\.|villa|cottage|apartment|apt\.?|flat|block|building|bldg\.?)\b/i,
     ROAD: /\b(road|rd\.?|street|st\.?|lane|ln\.?|drive|dr\.?|avenue|ave\.?|marg|path|nagar|layout|cross)\b/i
 };
 
-/* ---------- NEGATIVE / JUNK IDENTIFIERS (100% CERTAIN) ---------- */
+/* ---------- NEGATIVE IDENTIFIERS (LABELS ONLY) ---------- */
 const NEGATIVE = {
     RELATION: /\b(c\/o|s\/o|d\/o|w\/o|h\/o)\b/i,
-    ADDRESS_HDR: /\b(address|to)\b\s*[:\-]?/i
+    ADDRESS_HDR: /\b(address|to)\b\s*[:\-]?/i,
+    ADMIN: /\b(district|dist\.?|taluk|taluka|tq\.?|tehsil|state|pin\s*code)\b/i
 };
 
-
-/* ---------- TOKENIZER ---------- */
+/* ---------- TOKENIZER (FILTER NEGATIVES AT SOURCE) ---------- */
 function tokenizeAddress(text, personName = '') {
     return text
         .replace(/[^\x20-\x7E]/g, ' ')
@@ -767,8 +767,8 @@ function tokenizeAddress(text, personName = '') {
         .map(t => t.trim())
         .filter(t =>
             t &&
-            !NEGATIVE.RELATION.test(t) &&
             !NEGATIVE.ADDRESS_HDR.test(t) &&
+            !NEGATIVE.ADMIN.test(t) &&
             (!personName || !t.toLowerCase().includes(personName.toLowerCase()))
         );
 }
@@ -779,68 +779,76 @@ function extractAddress(text, personName = '') {
     const tokens = tokenizeAddress(text, personName);
 
     let house = '';
-    let road = '';
-    let town = '';
+    let road  = '';
+    let town  = '';
     let pincode = '';
 
-    /* ===== PIN CODE (ABSOLUTE ANCHOR) ===== */
+    /* PIN — ABSOLUTE ANCHOR */
     const pinMatch = text.match(POSITIVE.PIN);
-    if (pinMatch) {
-        pincode = pinMatch[0];
+    if (pinMatch) pincode = pinMatch[0];
+
+    /* 1️⃣ POSITIVE IDENTIFICATION FIRST */
+    const houseIndex = tokens.findIndex(t => POSITIVE.HOUSE.test(t));
+    const roadIndex  = tokens.findIndex(t => POSITIVE.ROAD.test(t));
+
+    if (houseIndex !== -1) {
+        house = tokens[houseIndex];
+        if (!road && tokens[houseIndex + 1]) {
+            road = tokens[houseIndex + 1];
+        }
     }
 
-    /* ===== PO (ABSOLUTE TOWN OVERRIDE) ===== */
+    if (roadIndex !== -1) {
+        road = tokens[roadIndex];
+        if (!house && tokens[roadIndex - 1]) {
+            house = tokens[roadIndex - 1];
+        }
+    }
+
+    /* 2️⃣ C/O FALLBACK (NAME AWARE) */
+    if (!house || !road) {
+        const relIndex = tokens.findIndex(t => NEGATIVE.RELATION.test(t));
+        if (relIndex !== -1) {
+            // relIndex + 1 = name → skip
+            if (!house && tokens[relIndex + 2]) house = tokens[relIndex + 2];
+            if (!road  && tokens[relIndex + 3]) road  = tokens[relIndex + 3];
+        }
+    }
+
+    /* 3️⃣ TOWN — PO OVERRIDES */
     const poMatch = text.match(POSITIVE.PO);
     if (poMatch) {
         town = poMatch[1].trim();
     }
 
-    /* ===== HOUSE (KEYWORD / SYNONYM ONLY) ===== */
-    for (const t of tokens) {
-        if (POSITIVE.HOUSE.test(t)) {
-            house = t;
-            break;
-        }
-    }
-
-    /* ===== ROAD (KEYWORD ONLY) ===== */
-    for (const t of tokens) {
-        if (POSITIVE.ROAD.test(t)) {
-            road = t;
-            break;
-        }
-    }
-
-    /* ===== TOWN (PIN-RELATIVE, PO ABSENT) ===== */
+    /* 4️⃣ TOWN — PIN RELATIVE (-1, -2, -3) */
     if (!town && pincode) {
         const pinIndex = tokens.findIndex(t => t.includes(pincode));
-        if (pinIndex > 0) {
-            const start = Math.max(0, pinIndex - 3);
-            town = tokens.slice(start, pinIndex).join(', ');
-        }
+        town = tokens
+            .slice(Math.max(0, pinIndex - 3), pinIndex)
+            .filter(t =>
+                t !== house &&
+                t !== road &&
+                !/\d/.test(t)
+            )
+            .join(', ');
     }
 
-    return {
-        house: house || '',
-        road: road || '',
-        town: town || '',
-        pincode: pincode || ''
-    };
+    return { house, road, town, pincode };
 }
 
 /* ---------- APPLY TO FORM (NO OVERRIDES) ---------- */
 function fillAddressFields(ocrText) {
-
     const personName = document.getElementById('name')?.value || '';
-    const result = extractAddress(ocrText, personName);
+    const r = extractAddress(ocrText, personName);
 
-    document.getElementById('house').value   = result.house;
-    document.getElementById('road').value    = result.road;
-    document.getElementById('town').value    = result.town;
-    document.getElementById('pincode').value = result.pincode;
+    if (r.house)   document.getElementById('house').value   = r.house;
+    if (r.road)    document.getElementById('road').value    = r.road;
+    if (r.town)    document.getElementById('town').value    = r.town;
+    if (r.pincode) document.getElementById('pincode').value = r.pincode;
 }
 
-/* ================= END ADDRESS BLOCK ================= */
+/* ================= END ADDRESS RULE ENGINE ================= */
 
         
         function showStatus(message, type) {
