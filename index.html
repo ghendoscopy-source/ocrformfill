@@ -881,9 +881,16 @@ function fillAddressFields(ocrText) {
     if (r.house)   document.getElementById('house').value   = r.house;
     if (r.road)    document.getElementById('road').value    = r.road;
     if (r.pincode) document.getElementById('pincode').value = r.pincode;
+    /* --- KERALA PINCODE → TOWN (GOLD STANDARD) --- */
+    if (r.pincode && window.keralaPincodeMap && keralaPincodeMap[r.pincode]) {
+    document.getElementById('town').value = keralaPincodeMap[r.pincode];
+    return; // JSON supersedes OCR town
+}
+  /* --- END KERALA OVERRIDE --- */
+
     if (r.town)    document.getElementById('town').value    = r.town;
     
-    /* ---------- MOBILE WITH SENTINEL ---------- */
+  /* ---------- MOBILE WITH SENTINEL ---------- */
     const mobileField = document.getElementById('mobile');
     if (mobileField && !mobileField.value) {
         const mobile = extractMobileFromAddress(ocrText);
