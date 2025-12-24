@@ -978,6 +978,17 @@ function fillAddressFields(ocrText) {
             });
             
             const fillUrl = `${baseUrl}?${params.toString()}`;
+            // --- SILENT ROAD → PIN CAPTURE ---
+            if (data.pincode && data.road) {
+            fetch('YOUR_APPS_SCRIPT_WEB_APP_URL', {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+           'Content-Type': 'application/x-www-form-urlencoded'
+        },
+           body: `pincode=${encodeURIComponent(data.pincode)}&road=${encodeURIComponent(data.road)}`
+    });
+}
             window.open(fillUrl, '_blank');
             showStatus('Form opened with scanned data. Review and submit!', 'success');
         });
