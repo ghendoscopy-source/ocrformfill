@@ -883,10 +883,10 @@ function fillAddressFields(ocrText) {
     if (r.pincode) document.getElementById('pincode').value = r.pincode;
     /* --- KERALA PINCODE → TOWN (GOLD STANDARD) --- */
     if (r.pincode && window.keralaPincodeMap && keralaPincodeMap[r.pincode]) {
-    document.getElementById('town').value = keralaPincodeMap[r.pincode];
-    return; // JSON supersedes OCR town
+    document.getElementById('town').value = keralaPincodeMap[r.pincode].town;
+    return;
 }
-  /* --- END KERALA OVERRIDE --- */
+    /* --- END KERALA OVERRIDE --- */
 
     if (r.town)    document.getElementById('town').value    = r.town;
     
