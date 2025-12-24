@@ -883,6 +883,7 @@ function fillAddressFields(ocrText) {
     if (r.pincode) document.getElementById('pincode').value = r.pincode;
     /* --- KERALA PINCODE → TOWN (GOLD STANDARD) --- */
     if (r.pincode && window.keralaPincodeMap && keralaPincodeMap[r.pincode]) {
+    alert("JSON HIT: " + keralaPincodeMap[r.pincode].town);
     document.getElementById('town').value = keralaPincodeMap[r.pincode].town;
     return;
 }
