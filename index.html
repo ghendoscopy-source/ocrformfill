@@ -781,99 +781,6 @@ function tokenizeAddress(text, personName = '') {
 }
 
 /* ---------- MAIN ADDRESS FUNCTION ---------- */
-function extractAddress(text, personName = '') {
-
-    const tokens = tokenizeAddress(text, personName);
-
-    let house = '';
-    let road = '';
-    let town = '';
-    let pincode = '';
-
-    /* ---------- PIN (ABSOLUTE ANCHOR) ---------- */
-    const pinMatch = text.match(POSITIVE.PIN);
-    if (pinMatch) pincode = pinMatch[0];
-
-    /* ---------- PRIMARY IDENTIFICATION ---------- */
-    const houseIndex = tokens.findIndex(t => POSITIVE.HOUSE.test(t));
-    const roadIndex  = tokens.findIndex(t => POSITIVE.ROAD.test(t));
-
-    if (houseIndex !== -1) house = tokens[houseIndex];
-    if (roadIndex  !== -1) road  = tokens[roadIndex];
-
-    /* ---------- SECONDARY: PAIR COMPLETION ---------- */
-    if (house && !road && houseIndex !== -1) {
-        const next = tokens[houseIndex + 1];
-        if (next && !/\d{6}/.test(next)) road = next;
-    }
-
-    if (road && !house && roadIndex !== -1) {
-        const prev = tokens[roadIndex - 1];
-        if (prev && !/\d{6}/.test(prev)) house = prev;
-    }
-
-    /* ---------- SECONDARY: C/O FALLBACK ---------- */
-    if (!house || !road) {
-        const relIndex = tokens.findIndex(t => NEGATIVE.RELATION.test(t));
-        if (relIndex !== -1) {
-            if (!house && tokens[relIndex + 2]) house = tokens[relIndex + 2];
-            if (!road  && tokens[relIndex + 3]) road  = tokens[relIndex + 3];
-        }
-    }
-
-    /* ---------- TOWN: PO OVERRIDE ---------- */
-    const poMatch = text.match(POSITIVE.PO);
-    if (poMatch) town = poMatch[1].trim();
-
-    /* ---------- TOWN: PIN-RELATIVE (MANDATORY) ---------- */
-    if (!town && pincode) {
-        const pinIndex = tokens.findIndex(t => t.includes(pincode));
-        if (pinIndex !== -1) {
-            const candidates = tokens
-                .slice(Math.max(0, pinIndex - 5), pinIndex)
-                .reverse()
-                .filter(t =>
-                    t !== house &&
-                    t !== road &&
-                    /^[A-Za-z\s]{3,}$/.test(t) &&
-                    !NEGATIVE.ADMIN.test(t)
-                );
-
-            if (candidates.length) town = candidates[0];
-        }
-    }
-
-    /* ---------- TOWN: FINAL FALLBACK ---------- */
-    if (!town) {
-        const fallback = tokens
-            .filter(t =>
-                /^[A-Za-z\s]{3,}$/.test(t) &&
-                t !== house &&
-                t !== road &&
-                !NEGATIVE.ADMIN.test(t)
-            )
-            .slice(-1);
-
-        if (fallback.length) town = fallback[0];
-    }
-
-    return { house, road, town, pincode };
-}
-
-/* ---------- MOBILE (ADDRESS BLOCK ONLY) ---------- */
-function extractMobileFromAddress(text) {
-    const pinMatch = text.match(/\b\d{6}\b/);
-    if (!pinMatch) return '';
-
-    const pinPos = text.indexOf(pinMatch[0]);
-    if (pinPos === -1) return '';
-
-    const afterPin = text.slice(pinPos + 6);
-    const mobileMatch = afterPin.match(/\b[6-9]\d{9}\b/);
-    return mobileMatch ? mobileMatch[0] : '';
-}
-
-/* ---------- APPLY TO FORM (NO OVERRIDES) ---------- */
 function fillAddressFields(ocrText) {
     const personName = document.getElementById('name')?.value || '';
     const r = extractAddress(ocrText, personName);
@@ -881,34 +788,25 @@ function fillAddressFields(ocrText) {
     if (r.house)   document.getElementById('house').value   = r.house;
     if (r.road)    document.getElementById('road').value    = r.road;
     if (r.pincode) document.getElementById('pincode').value = r.pincode;
-    
+    /* --- KERALA PINCODE → TOWN (GOLD STANDARD) --- */
     if (r.pincode && typeof KERALA_PINCODES !== 'undefined' && KERALA_PINCODES[r.pincode]) {
-        document.getElementById('town').value = KERALA_PINCODES[r.pincode].town;
-    } else if (r.town) {
-        document.getElementById('town').value = r.town;
-    }
+    document.getElementById('town').value = KERALA_PINCODES[r.pincode].town;
+    townLocked = true;
+ }
 
+
+    /* --- END KERALA OVERRIDE --- */
+
+    if (r.town)    document.getElementById('town').value    = r.town;
+    
+  /* ---------- MOBILE WITH SENTINEL ---------- */
     const mobileField = document.getElementById('mobile');
     if (mobileField && !mobileField.value) {
         const mobile = extractMobileFromAddress(ocrText);
         mobileField.value = mobile || '9999999999';
     }
 }
-```
 
----
-
-## **OR: Show Me Line 940**
-
-Copy lines **935-945** from your `index.html` and paste them here. I'll spot the exact syntax error.
-
----
-
-## **ABOUT THE OTHER ERRORS**
-
-These are **browser extension errors** (not your code):
-```
-Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true...
 
 /* ================= END ADDRESS RULE ENGINE ================= */
 
