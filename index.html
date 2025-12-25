@@ -933,6 +933,40 @@ document.addEventListener('DOMContentLoaded', () => {
     c.addEventListener('touchmove', () => {}, { passive: false });
 });
 </script>
+</script>
+
+<script>
+function extractAddress(text) {
+    const lines = text
+        .replace(/[^\x20-\x7E]/g, ' ')
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean);
+
+    const result = {
+        house: '',
+        road: '',
+        town: '',
+        pincode: ''
+    };
+
+    for (const line of lines) {
+        if (!result.pincode && /\b\d{6}\b/.test(line)) {
+            result.pincode = line.match(/\b\d{6}\b/)[0];
+        }
+        if (!result.road && /(road|rd|street|st|lane|nagar|layout)/i.test(line)) {
+            result.road = line;
+        }
+        if (!result.house && /(house|flat|villa|door|apt)/i.test(line)) {
+            result.house = line;
+        }
+        if (!result.town && !/\d/.test(line)) {
+            result.town = line;
+        }
+    }
+    return result;
+}
+</script>
 
 </body>
 </html>
