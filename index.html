@@ -875,95 +875,40 @@ function extractMobileFromAddress(text) {
 
 /* ---------- APPLY TO FORM (NO OVERRIDES) ---------- */
 function fillAddressFields(ocrText) {
-    alert('START fillAddressFields');
-    
     const personName = document.getElementById('name')?.value || '';
-    alert('Got personName: ' + personName);
-    
     const r = extractAddress(ocrText, personName);
-    alert('extractAddress returned: ' + JSON.stringify(r));
-    
-    if (r.house) document.getElementById('house').value = r.house;
-    if (r.road) document.getElementById('road').value = r.road;
+
+    if (r.house)   document.getElementById('house').value   = r.house;
+    if (r.road)    document.getElementById('road').value    = r.road;
     if (r.pincode) document.getElementById('pincode').value = r.pincode;
-    alert('Set house/road/pincode');
-    
-    /* --- KERALA PINCODE → TOWN --- */
-    alert('About to check Kerala PIN');
     
     if (r.pincode && typeof KERALA_PINCODES !== 'undefined' && KERALA_PINCODES[r.pincode]) {
-        alert('Kerala PIN matched: ' + r.pincode);
         document.getElementById('town').value = KERALA_PINCODES[r.pincode].town;
-        alert('Town set to: ' + KERALA_PINCODES[r.pincode].town);
     } else if (r.town) {
-        alert('Using OCR town: ' + r.town);
         document.getElementById('town').value = r.town;
     }
-    
-    alert('About to extract mobile');
-    
-    /* ---------- MOBILE ---------- */
+
     const mobileField = document.getElementById('mobile');
-    alert('Mobile field exists: ' + (mobileField !== null));
-    
     if (mobileField && !mobileField.value) {
-        alert('Mobile field is empty, extracting...');
         const mobile = extractMobileFromAddress(ocrText);
-        alert('Extracted mobile: ' + mobile);
         mobileField.value = mobile || '9999999999';
-        alert('Mobile field set to: ' + mobileField.value);
-    } else {
-        alert('Mobile field already has value: ' + (mobileField ? mobileField.value : 'FIELD NOT FOUND'));
     }
-    
-    alert('END fillAddressFields');
 }
 ```
 
 ---
 
-## **WHAT TO DO**
+## **OR: Show Me Line 940**
 
-1. **Paste** the code above
-2. **Scan** an address block
-3. **Click through** all the alert popups
-4. **Tell me**: Which is the **LAST alert you see** before it stops?
-
-This will tell us exactly which line is causing the problem.
+Copy lines **935-945** from your `index.html` and paste them here. I'll spot the exact syntax error.
 
 ---
 
-## **MY PREDICTION**
+## **ABOUT THE OTHER ERRORS**
 
-Based on your symptoms, I predict the last alert you'll see is one of these:
-
-**Option A**: `"About to check Kerala PIN"`
-- **Problem**: Error in the Kerala `if` condition
-
-**Option B**: `"Kerala PIN matched: 682504"`  
-- **Problem**: Error when accessing `KERALA_PINCODES[r.pincode].town`
-
-**Option C**: `"Town set to: MULAVUKAD"`
-- **Problem**: Code after town logic is not being reached (missing closing brace?)
-
----
-
-## **ALTERNATIVE: Check for Syntax Errors**
-
-Open your browser:
-1. Press **F12**
-2. Go to **Console** tab
-3. Scan an address block
-4. Look for **RED error messages**
-
-**Screenshot or copy-paste ANY red errors you see.**
-
-Common errors that would cause this:
+These are **browser extension errors** (not your code):
 ```
-Uncaught SyntaxError: Unexpected token
-Uncaught ReferenceError: KERALA_PINCODES is not defined
-Uncaught TypeError: Cannot read property 'town' of undefined
-
+Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true...
 
 /* ================= END ADDRESS RULE ENGINE ================= */
 
