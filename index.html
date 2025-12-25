@@ -780,6 +780,77 @@ function tokenizeAddress(text, personName = '') {
         );
 }
 
+        /* ---------- EXTRACT ADDRESS (CORE LOGIC) ---------- */
+function extractAddress(text, personName = '') {
+    const tokens = tokenizeAddress(text, personName);
+    const result = { house: '', road: '', town: '', pincode: '' };
+    
+    // Extract PIN code
+    for (const t of tokens) {
+        const m = t.match(POSITIVE.PIN);
+        if (m) {
+            result.pincode = m[0];
+            break;
+        }
+    }
+    
+    // Extract PO (Post Office) as town
+    for (const t of tokens) {
+        const m = t.match(POSITIVE.PO);
+        if (m && m[1]) {
+            result.town = m[1].trim();
+            break;
+        }
+    }
+    
+    // Extract House and Road
+    const houseCandidates = [];
+    const roadCandidates = [];
+    
+    for (const t of tokens) {
+        if (NEGATIVE.RELATION.test(t)) continue;
+        
+        const hasHouseKw = POSITIVE.HOUSE.test(t);
+        const hasRoadKw = POSITIVE.ROAD.test(t);
+        
+        if (hasHouseKw) houseCandidates.push(t);
+        if (hasRoadKw) roadCandidates.push(t);
+        
+        // No keywords: classify by position/pattern
+        if (!hasHouseKw && !hasRoadKw && t.length > 2) {
+            const hasNum = /\d/.test(t);
+            if (hasNum && !result.house) {
+                houseCandidates.push(t);
+            } else if (!result.road) {
+                roadCandidates.push(t);
+            }
+        }
+    }
+    
+    result.house = houseCandidates[0] || '';
+    result.road = roadCandidates[0] || '';
+    
+    return result;
+}
+
+/* ---------- MOBILE EXTRACTION ---------- */
+function extractMobileFromAddress(text) {
+    // Remove all whitespace and non-digits first
+    const digits = text.replace(/\D/g, '');
+    
+    // Look for 10-digit sequences starting with 6-9
+    const m = digits.match(/[6-9]\d{9}/);
+    if (m) return m[0];
+    
+    // Alternative: look for patterns with spaces/dashes
+    const altMatch = text.match(/\b([6-9]\d[\s\-]?\d{3}[\s\-]?\d{5})\b/);
+    if (altMatch) {
+        return altMatch[1].replace(/\D/g, '');
+    }
+    
+    return '';
+}
+
 /* ---------- MAIN ADDRESS FUNCTION ---------- */
 function fillAddressFields(ocrText) {
     const personName = document.getElementById('name')?.value || '';
@@ -788,25 +859,21 @@ function fillAddressFields(ocrText) {
     if (r.house)   document.getElementById('house').value   = r.house;
     if (r.road)    document.getElementById('road').value    = r.road;
     if (r.pincode) document.getElementById('pincode').value = r.pincode;
+    
     /* --- KERALA PINCODE → TOWN (GOLD STANDARD) --- */
     if (r.pincode && typeof KERALA_PINCODES !== 'undefined' && KERALA_PINCODES[r.pincode]) {
-    document.getElementById('town').value = KERALA_PINCODES[r.pincode].town;
-    townLocked = true;
- }
-
-
-    /* --- END KERALA OVERRIDE --- */
-
-    if (r.town)    document.getElementById('town').value    = r.town;
+        document.getElementById('town').value = KERALA_PINCODES[r.pincode].town;
+    } else if (r.town) {
+        document.getElementById('town').value = r.town;
+    }
     
-  /* ---------- MOBILE WITH SENTINEL ---------- */
+    /* ---------- MOBILE WITH SENTINEL ---------- */
     const mobileField = document.getElementById('mobile');
     if (mobileField && !mobileField.value) {
         const mobile = extractMobileFromAddress(ocrText);
         mobileField.value = mobile || '9999999999';
     }
 }
-
 
 /* ================= END ADDRESS RULE ENGINE ================= */
 
