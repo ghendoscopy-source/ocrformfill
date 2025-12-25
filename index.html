@@ -910,63 +910,7 @@ function fillAddressFields(ocrText) {
             window.open(formUrl.split('?')[0], '_blank');
             showStatus('Opening blank form for manual entry...', 'info');
         });
-    </script>
-    <script>
-/* ===== SAFETY PATCH (REQUIRED) ===== */
-
-if (typeof townLocked === 'undefined') {
-    var townLocked = false;
-}
-
-if (typeof extractMobileFromAddress === 'undefined') {
-    function extractMobileFromAddress(text) {
-        const m = text.match(/\b[6-9]\d{9}\b/);
-        return m ? m[0] : '';
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const c = document.getElementById('selectionCanvas');
-    if (!c) return;
-
-    c.addEventListener('touchstart', () => {}, { passive: false });
-    c.addEventListener('touchmove', () => {}, { passive: false });
-});
+    
 </script>
-</script>
-
-<script>
-function extractAddress(text) {
-    const lines = text
-        .replace(/[^\x20-\x7E]/g, ' ')
-        .split('\n')
-        .map(l => l.trim())
-        .filter(Boolean);
-
-    const result = {
-        house: '',
-        road: '',
-        town: '',
-        pincode: ''
-    };
-
-    for (const line of lines) {
-        if (!result.pincode && /\b\d{6}\b/.test(line)) {
-            result.pincode = line.match(/\b\d{6}\b/)[0];
-        }
-        if (!result.road && /(road|rd|street|st|lane|nagar|layout)/i.test(line)) {
-            result.road = line;
-        }
-        if (!result.house && /(house|flat|villa|door|apt)/i.test(line)) {
-            result.house = line;
-        }
-        if (!result.town && !/\d/.test(line)) {
-            result.town = line;
-        }
-    }
-    return result;
-}
-</script>
-
 </body>
 </html>
