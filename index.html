@@ -882,10 +882,11 @@ function fillAddressFields(ocrText) {
     if (r.road)    document.getElementById('road').value    = r.road;
     if (r.pincode) document.getElementById('pincode').value = r.pincode;
     /* --- KERALA PINCODE → TOWN (GOLD STANDARD) --- */
-   if (r.pincode && typeof KERALA_PINCODES !== 'undefined' && KERALA_PINCODES[r.pincode]) {
+    if (r.pincode && typeof KERALA_PINCODES !== 'undefined' && KERALA_PINCODES[r.pincode]) {
     document.getElementById('town').value = KERALA_PINCODES[r.pincode].town;
     return;
-}
+ }
+
 
     /* --- END KERALA OVERRIDE --- */
 
