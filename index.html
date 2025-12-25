@@ -884,7 +884,7 @@ function fillAddressFields(ocrText) {
     /* --- KERALA PINCODE → TOWN (GOLD STANDARD) --- */
     if (r.pincode && typeof KERALA_PINCODES !== 'undefined' && KERALA_PINCODES[r.pincode]) {
     document.getElementById('town').value = KERALA_PINCODES[r.pincode].town;
-    return;
+    townLocked = true;
  }
 
 
