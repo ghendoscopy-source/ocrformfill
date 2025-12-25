@@ -747,32 +747,27 @@ else if (mode === 'address') {
 }
 }  // <-- closes: function parseAndFillData
 
+/* ================= ADDRESS RULE ENGINE (REFINED) ================= */
 
-/* ================= ADDRESS RULE ENGINE (REPLACEMENT) ================= */
-
-
-/* ---------- POSITIVE IDENTIFIERS ---------- */
+/* ---------- IDENTIFIERS (AS DEFINED) ---------- */
 const POSITIVE = {
     PIN: /\b\d{6}\b/,
     PO: /\bP\.?\s*O\.?\s*[:\-]?\s*([A-Za-z ]{3,})/i,
-    HOUSE: /\b(house|h\.?\s*no|door\s*no|d\.?\s*no|no\.|villa|cottage|apartment|apt\.?|flat|block|building|bldg\.?)\b/i,
-    ROAD: /\b(road|rd\.?|street|st\.?|lane|ln\.?|drive|dr\.?|avenue|ave\.?|marg|path|nagar|layout|cross)\b/i
+    HOUSE: /\b(house|h\.?s*no|door\s*no|d\.?s*no|no\.|villa|cottage|apartment|apt\.?|flat|block|building|bldg\.?|mannil|purayidam)\b/i,
+    ROAD: /\b(road|rd\.?|street|st\.?|lane|ln\.?|drive|dr\.?|avenue|ave\.?|marg|path|nagar|layout|cross|jn|junction)\b/i
 };
 
-/* ---------- NEGATIVE IDENTIFIERS (LABELS ONLY) ---------- */
 const NEGATIVE = {
-    RELATION: /\b(c\/o|s\/o|d\/o|w\/o|h\/o)\b/i,
+    RELATION: /\b(c\/o|s\/o|d\/o|w\/o|h\/o|care of|son of|wife of|daughter of)\b/i,
     ADDRESS_HDR: /\b(address|to)\b\s*[:\-]?/i,
-    ADMIN: /\b(district|dist\.?|taluk|taluka|tq\.?|tehsil|state|pin\s*code)\b/i
+    ADMIN: /\b(district|dist\.?|taluk|taluka|tq\.?|tehsil|state|pin\s*code|kerala|india)\b/i
 };
-
-/* ================= REFINED SEQUENTIAL ADDRESS ENGINE ================= */
 
 function fillAddressFields(ocrText) {
     const personName = document.getElementById('name')?.value || '';
     
-    // 1. PIN & MOBILE (Locked First)
-    const pinMatch = ocrText.match(/\b\d{6}\b/);
+    // 1. PIN & MOBILE (High Accuracy - Locked First)
+    const pinMatch = ocrText.match(POSITIVE.PIN);
     const pincode = pinMatch ? pinMatch[0] : '';
     if (pincode) document.getElementById('pincode').value = pincode;
 
@@ -781,75 +776,77 @@ function fillAddressFields(ocrText) {
     const mobileField = document.getElementById('mobile');
     if (mobileField) mobileField.value = mobile || '9999999999';
 
-    // 2. TOWN (PIN -> JSON Lookup)
+    // 2. TOWN (PIN -> JSON Lookup Priority)
     let town = '';
     if (pincode && typeof KERALA_PINCODES !== 'undefined' && KERALA_PINCODES[pincode]) {
         town = KERALA_PINCODES[pincode].town;
     }
+    // Fallback: If no JSON match, use POSITIVE.PO identifier
+    if (!town) {
+        const poMatch = ocrText.match(POSITIVE.PO);
+        town = poMatch ? poMatch[1].trim() : '';
+    }
     if (town) document.getElementById('town').value = town;
 
-    // 3. HOUSE & ROAD (Position-Based with Header Stripping)
+    // 3. HOUSE & ROAD (Clean Sequence)
     
-    // Step A: Strip Headers (To, Address, C/o, Name, PIN, Mobile, Town)
-    let cleanAddress = ocrText
-        .replace(new RegExp(`To|Address|Address:|C/o|S/o|W/o|D/o|${personName}`, 'gi'), '')
-        .replace(pincode, '')
-        .replace(mobile, '')
-        .replace(town, '')
-        .replace(/\n/g, ',') // Convert newlines to commas for segmentation
-        .trim();
+    // Step A: Convert newlines to commas and split into segments
+    let rawSegments = ocrText.split(/[\n,]/).map(s => s.trim());
 
-    // Step B: Split into segments and remove empty/junk tokens
-    const segments = cleanAddress.split(',')
-        .map(s => s.trim().replace(/^[:,\s]+|[:,\s]+$/g, '')) // Clean stray colons/commas
-        .filter(s => s.length > 2);
+    // Step B: Filter segments using NEGATIVE list and identity data
+    let cleanSegments = rawSegments.filter(seg => {
+        const isName = personName && seg.toLowerCase().includes(personName.toLowerCase());
+        const isHeader = NEGATIVE.ADDRESS_HDR.test(seg);
+        const isAdmin = NEGATIVE.ADMIN.test(seg);
+        const isPincode = pincode && seg.includes(pincode);
+        const isMobile = mobile && seg.includes(mobile);
+        
+        return seg.length > 2 && !isName && !isHeader && !isAdmin && !isPincode && !isMobile;
+    });
+
+    // Step C: Strip Relationship prefixes from segments (e.g., "S/o Name, House")
+    cleanSegments = cleanSegments.map(seg => seg.replace(NEGATIVE.RELATION, '').trim())
+                                 .filter(seg => seg.length > 2);
 
     let house = '';
     let road = '';
 
-    // Step C: Keyword Check (Overrides Position)
-    let houseIdx = -1;
-    let roadIdx = -1;
+    // Step D: Keyword Priority (Look for explicit POSITIVE identifiers)
+    const houseFound = cleanSegments.find(s => POSITIVE.HOUSE.test(s));
+    const roadFound = cleanSegments.find(s => POSITIVE.ROAD.test(s));
 
-    segments.forEach((seg, index) => {
-        if (/(House|H\.No|Bldg|Ward|Building|Villa|Mannil|House)/i.test(seg)) houseIdx = index;
-        if (/(Road|Rd|Street|St|Lane|Jn|Junction|St\.)/i.test(seg)) roadIdx = index;
-    });
-
-    // Step D: Assignment Logic
-    // If keywords found, use them. Otherwise, use Sequence (First = House, Second = Road)
-    if (houseIdx !== -1) {
-        house = segments[houseIdx];
-    } else {
-        house = segments[0] || ''; 
+    if (houseFound) {
+        house = houseFound;
+    }
+    if (roadFound) {
+        road = roadFound;
     }
 
-    if (roadIdx !== -1) {
-        road = segments[roadIdx];
-    } else {
-        // If the house took segment 0, road takes segment 1
-        // But only if segment 1 exists and isn't the same as the house
-        road = (segments[0] === house) ? (segments[1] || '') : (segments[0] || '');
-        
-        // Final sanity check: if house and road are identical, shift road forward
-        if (house === road && segments[1]) road = segments[1];
+    // Step E: Sequence Fallback (If keywords didn't find them)
+    // HOUSE is the first valid segment after headers are stripped
+    if (!house && cleanSegments.length > 0) {
+        house = cleanSegments[0];
+    }
+    
+    // ROAD is the next valid segment
+    if (!road && cleanSegments.length > 1) {
+        // If the first segment was used for house, pick the next one
+        road = (cleanSegments[0] === house) ? cleanSegments[1] : cleanSegments[0];
     }
 
-    document.getElementById('house').value = house;
-    document.getElementById('road').value = road;
+    // Assign to UI
+    document.getElementById('house').value = house.replace(/^[:,\s]+|[:,\s]+$/g, '');
+    document.getElementById('road').value = road.replace(/^[:,\s]+|[:,\s]+$/g, '');
 
     // 4. FORMATTING
     applySentenceCase();
 }
 
-/* ---------- HELPER: PROPER CASE FORMATTING ---------- */
 function applySentenceCase() {
-    const fields = ['name', 'house', 'road', 'town'];
-    fields.forEach(id => {
-        const input = document.getElementById(id);
-        if (input && input.value) {
-            // Converts "MG ROAD, KOCHI" to "Mg Road, Kochi"
-            input.value = input.value.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    ['name', 'house', 'road', 'town'].forEach(id => {
+        const field = document.getElementById(id);
+        if (field && field.value) {
+            field.value = field.value.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
         }
     });
 }
