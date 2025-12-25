@@ -911,5 +911,28 @@ function fillAddressFields(ocrText) {
             showStatus('Opening blank form for manual entry...', 'info');
         });
     </script>
+    <script>
+/* ===== SAFETY PATCH (REQUIRED) ===== */
+
+if (typeof townLocked === 'undefined') {
+    var townLocked = false;
+}
+
+if (typeof extractMobileFromAddress === 'undefined') {
+    function extractMobileFromAddress(text) {
+        const m = text.match(/\b[6-9]\d{9}\b/);
+        return m ? m[0] : '';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const c = document.getElementById('selectionCanvas');
+    if (!c) return;
+
+    c.addEventListener('touchstart', () => {}, { passive: false });
+    c.addEventListener('touchmove', () => {}, { passive: false });
+});
+</script>
+
 </body>
 </html>
