@@ -676,7 +676,7 @@
         
         function parseAndFillData(text, mode) {
             // Early validation
-            if (!text || text.trim().length < 10) {
+            if (!text) {
                 showStatus('Text too short to parse - manual entry required', 'error');
                 return;
             }
