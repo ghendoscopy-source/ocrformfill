@@ -552,24 +552,57 @@ async function handleSelectionEnd() {
     }
 }
 
-/* --- TOUCH EVENTS (MOBILE) --- */
+/* ================= MOTION, SELECTION & BUTTONS ================= */
+
+function updateTransform() {
+    if (canvasWrapper) {
+        canvasWrapper.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
+    }
+}
+
+function drawSelection() {
+    ctx.drawImage(img, 0, 0);
+    ctx.strokeStyle = (selectionMode === 'identity') ? '#007bff' : '#28a745';
+    ctx.lineWidth = 5 / currentScale; 
+    ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+    ctx.fillStyle = (selectionMode === 'identity') ? 'rgba(0,123,255,0.1)' : 'rgba(40,167,69,0.1)';
+    ctx.fillRect(startX, startY, endX - startX, endY - startY);
+}
+
+async function handleSelectionEnd() {
+    const x = Math.min(startX, endX);
+    const y = Math.min(startY, endY);
+    const w = Math.abs(endX - startX);
+    const h = Math.abs(endY - startY);
+    
+    if (w > 10 && h > 10) {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = w;
+        tempCanvas.height = h;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(img, x, y, w, h, 0, 0, w, h);
+        
+        const modeUsed = selectionMode;
+        selectionMode = null; 
+        canvas.style.cursor = 'default';
+        await performOCR(tempCanvas, modeUsed);
+    }
+}
+
+/* --- TOUCH EVENTS --- */
 canvas.addEventListener('touchstart', (e) => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-
     if (selectionMode) {
-        // SELECTION LOCK: Only allow drawing the box
         isSelecting = true;
-        isPanning = false; 
         const touch = e.touches[0];
         startX = (touch.clientX - rect.left) * scaleX;
         startY = (touch.clientY - rect.top) * scaleY;
     } else {
-        // PAN/ZOOM MODE: No tool selected
         if (e.touches.length === 2) {
             initialDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-        } else if (e.touches.length === 1) {
+        } else {
             lastTouchX = e.touches[0].clientX;
             lastTouchY = e.touches[0].clientY;
         }
@@ -581,20 +614,17 @@ canvas.addEventListener('touchmove', (e) => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-
     if (selectionMode && isSelecting) {
-        // ONLY DRAW: Image will not move
         const touch = e.touches[0];
         endX = (touch.clientX - rect.left) * scaleX;
         endY = (touch.clientY - rect.top) * scaleY;
-        drawSelection(); 
+        drawSelection();
     } else if (!selectionMode) {
-        // ONLY MOVE: Handle pan and zoom
         if (e.touches.length === 2) {
-            const currentDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-            currentScale = Math.max(1, Math.min(5, currentScale * (currentDistance / initialDistance)));
-            initialDistance = currentDistance;
-        } else if (e.touches.length === 1) {
+            const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            currentScale = Math.max(1, Math.min(5, currentScale * (dist / initialDistance)));
+            initialDistance = dist;
+        } else {
             translateX += e.touches[0].clientX - lastTouchX;
             translateY += e.touches[0].clientY - lastTouchY;
             lastTouchX = e.touches[0].clientX;
@@ -605,136 +635,69 @@ canvas.addEventListener('touchmove', (e) => {
     e.preventDefault();
 }, {passive: false});
 
-canvas.addEventListener('touchend', (e) => {
+canvas.addEventListener('touchend', () => {
     if (isSelecting) handleSelectionEnd();
     isSelecting = false;
-    e.preventDefault();
 });
 
-/* --- MOUSE EVENTS (DESKTOP) --- */
-canvas.addEventListener('mousedown', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-
-    if (selectionMode) {
-        isSelecting = true;
-        startX = (e.clientX - rect.left) * scaleX;
-        startY = (e.clientY - rect.top) * scaleY;
-    } else {
-        isPanning = true;
-        lastTouchX = e.clientX;
-        lastTouchY = e.clientY;
-    }
-});
-
-window.addEventListener('mousemove', (e) => {
-    if (selectionMode && isSelecting) {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        endX = (e.clientX - rect.left) * scaleX;
-        endY = (e.clientY - rect.top) * scaleY;
-        drawSelection();
-    } else if (isPanning && !selectionMode) {
-        translateX += e.clientX - lastTouchX;
-        translateY += e.clientY - lastTouchY;
-        lastTouchX = e.clientX;
-        lastTouchY = e.clientY;
-        updateTransform();
-    }
-});
-
-window.addEventListener('mouseup', () => {
-    if (isSelecting) handleSelectionEnd();
-    isSelecting = false;
-    isPanning = false;
-});
-        
-   /* --- 1. CONNECT THE BUTTONS --- */
+/* --- BUTTON CONNECTORS --- */
 selectIdentityBtn.addEventListener('click', () => {
     selectionMode = 'identity';
     canvas.style.cursor = 'crosshair';
-    showStatus('CANVAS LOCKED: Drag to select Identity block', 'info');
+    showStatus('CANVAS LOCKED: Select Identity', 'info');
 });
 
 selectAddressBtn.addEventListener('click', () => {
     selectionMode = 'address';
     canvas.style.cursor = 'crosshair';
-    showStatus('CANVAS LOCKED: Drag to select Address block', 'info');
+    showStatus('CANVAS LOCKED: Select Address', 'info');
 });
 
 resetBtn.addEventListener('click', () => {
-    // Reset Canvas Drawing
-    ctx.drawImage(img, 0, 0);
-    // Reset Logic & Locks
     selectionMode = null;
-    isSelecting = false;
-    isPanning = false;
-    // Reset Position
-    currentScale = 1;
-    translateX = 0;
-    translateY = 0;
+    currentScale = 1; translateX = 0; translateY = 0;
     updateTransform();
-    canvas.style.cursor = 'default';
-    showStatus('Canvas Reset & Unlocked', 'info');
+    ctx.drawImage(img, 0, 0);
+    showStatus('Reset Successful', 'info');
 });
 
-/* --- 2. THE OCR HANDLER (CRITICAL) --- */
+/* --- OCR STARTER --- */
 async function performOCR(canvasSource, mode) {
     progressBar.style.display = 'block';
-    showStatus('Processing with OCR...', 'info');
-    
+    showStatus('Scanning...', 'info');
     try {
-        const worker = await Tesseract.createWorker('eng', 1, {
-            logger: m => {
-                if (m.status === 'recognizing text') {
-                    progressFill.style.width = (m.progress * 100) + '%';
-                    progressFill.textContent = Math.round(m.progress * 100) + '%';
-                }
-            }
-        });
-
+        const worker = await Tesseract.createWorker('eng');
         const { data: { text } } = await worker.recognize(canvasSource);
         await worker.terminate();
-        
-        parseAndFillData(text, mode);
-        progressBar.style.display = 'none';
+        // This line sends the text to your 500 lines of data logic below
+        parseAndFillData(text, mode); 
     } catch (err) {
-        console.error(err);
-        showStatus('OCR Failed: ' + err.message, 'error');
-        progressBar.style.display = 'none';
+        showStatus('Error: ' + err.message, 'error');
     }
+    progressBar.style.display = 'none';
 }
 
-/* --- 3. REPAIR THE LOAD IMAGE FUNCTION --- */
+/* --- IMAGE LOADER --- */
 function loadImage(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
-        img = new Image(); // Create new instance
+        img = new Image();
         img.onload = () => {
             canvas.width = img.width;
             canvas.height = img.height;
             ctx.drawImage(img, 0, 0);
-            
-            // Initial view setup
             selectionMode = null;
-            isPanning = false;
-            currentScale = 1;
-            translateX = 0;
-            translateY = 0;
+            currentScale = 1; translateX = 0; translateY = 0;
             updateTransform();
-            
             canvas.style.display = 'block';
             selectIdentityBtn.disabled = false;
             selectAddressBtn.disabled = false;
             resetBtn.disabled = false;
-            showStatus('Image loaded! Move with 1 finger, select with buttons.', 'success');
         };
         img.src = e.target.result;
     };
     reader.readAsDataURL(file);
-}    
+}
         
         function parseAndFillData(text, mode) {
             // Early validation
