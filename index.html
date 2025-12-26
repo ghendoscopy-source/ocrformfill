@@ -651,7 +651,90 @@ window.addEventListener('mouseup', () => {
     isPanning = false;
 });
         
-       
+   /* --- 1. CONNECT THE BUTTONS --- */
+selectIdentityBtn.addEventListener('click', () => {
+    selectionMode = 'identity';
+    canvas.style.cursor = 'crosshair';
+    showStatus('CANVAS LOCKED: Drag to select Identity block', 'info');
+});
+
+selectAddressBtn.addEventListener('click', () => {
+    selectionMode = 'address';
+    canvas.style.cursor = 'crosshair';
+    showStatus('CANVAS LOCKED: Drag to select Address block', 'info');
+});
+
+resetBtn.addEventListener('click', () => {
+    // Reset Canvas Drawing
+    ctx.drawImage(img, 0, 0);
+    // Reset Logic & Locks
+    selectionMode = null;
+    isSelecting = false;
+    isPanning = false;
+    // Reset Position
+    currentScale = 1;
+    translateX = 0;
+    translateY = 0;
+    updateTransform();
+    canvas.style.cursor = 'default';
+    showStatus('Canvas Reset & Unlocked', 'info');
+});
+
+/* --- 2. THE OCR HANDLER (CRITICAL) --- */
+async function performOCR(canvasSource, mode) {
+    progressBar.style.display = 'block';
+    showStatus('Processing with OCR...', 'info');
+    
+    try {
+        const worker = await Tesseract.createWorker('eng', 1, {
+            logger: m => {
+                if (m.status === 'recognizing text') {
+                    progressFill.style.width = (m.progress * 100) + '%';
+                    progressFill.textContent = Math.round(m.progress * 100) + '%';
+                }
+            }
+        });
+
+        const { data: { text } } = await worker.recognize(canvasSource);
+        await worker.terminate();
+        
+        parseAndFillData(text, mode);
+        progressBar.style.display = 'none';
+    } catch (err) {
+        console.error(err);
+        showStatus('OCR Failed: ' + err.message, 'error');
+        progressBar.style.display = 'none';
+    }
+}
+
+/* --- 3. REPAIR THE LOAD IMAGE FUNCTION --- */
+function loadImage(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        img = new Image(); // Create new instance
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            // Initial view setup
+            selectionMode = null;
+            isPanning = false;
+            currentScale = 1;
+            translateX = 0;
+            translateY = 0;
+            updateTransform();
+            
+            canvas.style.display = 'block';
+            selectIdentityBtn.disabled = false;
+            selectAddressBtn.disabled = false;
+            resetBtn.disabled = false;
+            showStatus('Image loaded! Move with 1 finger, select with buttons.', 'success');
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}    
         
         function parseAndFillData(text, mode) {
             // Early validation
