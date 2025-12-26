@@ -391,22 +391,28 @@
 
     <script src="kerala-pincode.js"></script>
     <script>
-        let img = new Image();
-        let canvas = document.getElementById('selectionCanvas');
-        let ctx = canvas.getContext('2d');
-        let canvasContainer = document.getElementById('canvasContainer');
-        let canvasWrapper = document.getElementById('canvasWrapper');
-        let isSelecting = false;
-        let startX = 0, startY = 0, endX = 0, endY = 0;
-        let selectionMode = null;
-        
-        // Zoom & Panning variables - UPDATED for full movement
-        let currentScale = 1;
-        let translateX = 0;      // New: tracks horizontal drag
-        let translateY = 0;      // New: tracks vertical drag
-        let lastTouchX = 0;      // New: remembers last touch position
-        let lastTouchY = 0;      // New: remembers last touch position
-        let initialDistance = 0;
+        /* --- STEP 2: VARIABLE MEMORY (CLEAN VERSION) --- */
+let img = new Image();
+let canvas = document.getElementById('selectionCanvas');
+let ctx = canvas.getContext('2d');
+let canvasContainer = document.getElementById('canvasContainer');
+let canvasWrapper = document.getElementById('canvasWrapper');
+
+// Logic Gates
+let isSelecting = false;   // For drawing boxes
+let isPanning = false;     // For moving the image
+let selectionMode = null;   // The LOCK ('identity', 'address', or null)
+
+// Movement Memory
+let currentScale = 1;
+let translateX = 0;
+let translateY = 0;
+let lastTouchX = 0;
+let lastTouchY = 0;
+let initialDistance = 0;
+
+// Box Coordinates
+let startX = 0, startY = 0, endX = 0, endY = 0;
         
         const cameraInput = document.getElementById('cameraInput');
         const fileInput = document.getElementById('fileInput');
