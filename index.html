@@ -391,10 +391,13 @@
         let startX = 0, startY = 0, endX = 0, endY = 0;
         let selectionMode = null;
         
-        // Zoom variables
+        // Zoom & Panning variables - UPDATED for full movement
         let currentScale = 1;
+        let translateX = 0;      // New: tracks horizontal drag
+        let translateY = 0;      // New: tracks vertical drag
+        let lastTouchX = 0;      // New: remembers last touch position
+        let lastTouchY = 0;      // New: remembers last touch position
         let initialDistance = 0;
-        let isPanning = false;
         
         const cameraInput = document.getElementById('cameraInput');
         const fileInput = document.getElementById('fileInput');
