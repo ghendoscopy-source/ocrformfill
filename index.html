@@ -476,22 +476,32 @@ function loadImage(file) {
             canvas.style.height = (img.height * fitScale) + 'px';
             canvas.style.display = 'block';
             
-            // Full Reset of Zoom and Pan coordinates
-            currentScale = 1;
-            translateX = 0;
-            translateY = 0;
-            updateTransform();
-            
-            selectIdentityBtn.disabled = false;
-            selectAddressBtn.disabled = false;
-            resetBtn.disabled = false;
-            zoomResetBtn.style.display = 'inline-block';
-            showStatus('Image loaded! Drag to move, pinch or scroll to zoom.', 'success');
-        };
-    };
-    reader.readAsDataURL(file);
-}
+            /* --- IMAGE LOAD SUCCESS --- */
+img.onload = () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+    canvas.style.display = 'block';
 
+    // 1. HARD RESET: Unlock the movement logic for the new image
+    selectionMode = null;
+    isSelecting = false;
+    isPanning = false;
+
+    // 2. COORDINATE RESET: Center and reset zoom
+    currentScale = 1;
+    translateX = 0;
+    translateY = 0;
+    updateTransform(); // Physically move the wrapper back to 0,0
+
+    // 3. UI RESET
+    selectIdentityBtn.disabled = false;
+    selectAddressBtn.disabled = false;
+    resetBtn.disabled = false;
+    // zoomResetBtn.style.display = 'inline-block'; // Only if you have this button
+
+    showStatus('New Image Loaded! Movement Unlocked. Drag to move, pinch to zoom.', 'success');
+};
 /* --- 1. MOVES THE IMAGE --- */
 function updateTransform() {
     // This physically slides and zooms the image wrapper
