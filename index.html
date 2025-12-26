@@ -765,6 +765,8 @@ const NEGATIVE = {
 
 /* ================= REPLACED ADDRESS ENGINE ================= */
 
+/* ================= THRESHOLD-BASED ADDRESS ENGINE ================= */
+
 function fillAddressFields(ocrText) {
     const personName = document.getElementById('name')?.value || '';
     
@@ -779,61 +781,77 @@ function fillAddressFields(ocrText) {
         document.getElementById('mobile').value = mobile;
     }
 
-    // 2. SEGMENTATION (Comma-Mediated)
-    // We clean headers first, then split by COMMA.
-    // This treats newlines as spaces within a segment (Fixes "Marine [NL] Drive").
+    // 2. TOWN (Town First Rule - Kerala JSON)
+    let town = '';
+    if (pincode && typeof KERALA_PINCODES !== 'undefined' && KERALA_PINCODES[pincode]) {
+        town = KERALA_PINCODES[pincode].town;
+    }
+
+    // 3. ADAPTIVE SEGMENTATION (Strict 4-Comma Threshold)
+    let segments = [];
     let cleanText = ocrText
         .replace(new RegExp(`To|Address|Address:|${personName}`, 'gi'), '')
         .replace(pincode, '')
         .replace(mobile, '')
         .trim();
 
-    let segments = cleanText.split(',')
-        .map(seg => seg.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
-        .filter(seg => seg.length > 1 && !NEGATIVE.ADMIN.test(seg));
+    // The logic: 4+ commas = Database/CSV Style. < 4 = Multi-line label style.
+    const commaCount = (cleanText.match(/,/g) || []).length;
 
-    // 3. TOWN (TOWN FIRST RULE)
-    let town = '';
+    if (commaCount >= 4) {
+        // --- CSV MODE ---
+        // Newlines are ignored; only commas split the values.
+        segments = cleanText.split(',')
+            .map(seg => seg.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim());
+    } else {
+        // --- LINE MODE ---
+        // Commas are treated as text; newlines split the values.
+        segments = cleanText.split('\n')
+            .map(seg => seg.trim());
+    }
 
-    // A. Check Kerala JSON List
-    if (pincode && typeof KERALA_PINCODES !== 'undefined' && KERALA_PINCODES[pincode]) {
-        town = KERALA_PINCODES[pincode].town;
-    } 
-    
-    // B. Fallback for Out-of-State (if PIN not in JSON)
+    // Filter out empty entries and Administrative noise (States, etc.)
+    segments = segments.filter(seg => seg.length > 1 && !NEGATIVE.ADMIN.test(seg));
+
+    // 4. GUARDIAN / RELATION CLEANUP (First Segment Protection)
+    if (segments.length > 0) {
+        // Chop off "C/O [Name]" without using internal punctuation as a separator
+        segments[0] = segments[0]
+            .replace(/^.*?\b(c\/o|s\/o|d\/o|w\/o|h\/o)\b.*?(?=[A-Za-z0-9]|$)/i, '')
+            .replace(/^[:\/\s\-\?;]+/, '') // Scrub punctuation left at the start
+            .trim();
+        
+        if (segments[0].length < 2) segments.shift();
+    }
+
+    // 5. TOWN FALLBACK (If Outside Kerala)
     if (!town) {
-        // Look for PO Identifier or take the last comma-separated segment
         const poSegment = segments.find(s => POSITIVE.PO.test(s));
         if (poSegment) {
             const m = poSegment.match(POSITIVE.PO);
             town = m ? m[1].trim() : poSegment;
         } else if (segments.length > 0) {
+            // Standard Aadhaar: Town is the last segment before District/PIN
             town = segments[segments.length - 1]; 
         }
     }
     document.getElementById('town').value = town || '';
 
-    // 4. HOUSE & ROAD (Using remaining CSV segments)
-    // Filter out the identified town so it doesn't repeat in House/Road
+    // 6. HOUSE & ROAD (Subtract Town from remaining segments)
     const addressSegments = segments.filter(s => s !== town);
-
     let house = '';
     let road = '';
 
-    // Priority 1: Keyword Search
+    // A. Priority: Positive Identifier Keywords
     const houseFound = addressSegments.find(s => POSITIVE.HOUSE.test(s));
     const roadFound = addressSegments.find(s => POSITIVE.ROAD.test(s));
 
     if (houseFound) house = houseFound;
     if (roadFound) road = roadFound;
 
-    // Priority 2: Positional Fallback (Segment 1, 2, 3 logic)
-    if (!house && addressSegments.length > 0) {
-        // Strip S/O, C/O etc. from the house segment
-        house = addressSegments[0].replace(NEGATIVE.RELATION, '').trim();
-    }
+    // B. Priority: Positional Fallback
+    if (!house && addressSegments.length > 0) house = addressSegments[0];
     if (!road) {
-        // If House is segment 0, Road is segment 1
         road = (addressSegments[0] === house) ? (addressSegments[1] || '') : (addressSegments[0] || '');
     }
 
@@ -841,7 +859,8 @@ function fillAddressFields(ocrText) {
     document.getElementById('house').value = house;
     document.getElementById('road').value = road;
 
-    // 5. FORMATTING (Uses your existing function)
+    // 7. FORMATTING
+    // Your existing applySentenceCase() function is preserved and called here.
     applySentenceCase();
 }
 
