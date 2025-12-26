@@ -407,7 +407,17 @@
         const progressBar = document.getElementById('progressBar');
         const progressFill = document.getElementById('progressFill');
         const status = document.getElementById('status');
-        
+
+        // Save form URL to localStorage on change
+        const formUrlInput = document.getElementById('formUrl');
+        formUrlInput.addEventListener('input', () => {
+            const url = formUrlInput.value.trim();
+            if (url) {
+                localStorage.setItem('savedFormUrl', url);
+            } else {
+                localStorage.removeItem('savedFormUrl');
+            }
+        });
         capturePhotoBtn.addEventListener('click', () => cameraInput.click());
         uploadFileBtn.addEventListener('click', () => fileInput.click());
         
