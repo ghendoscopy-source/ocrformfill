@@ -119,11 +119,20 @@
             transition: transform 0.1s ease-out;
         }
         
-        #selectionCanvas {
-            border: none;
-            cursor: crosshair;
-            display: none;
-        }
+       #selectionCanvas {
+    /* LOCKS the canvas so the image doesn't slide while you draw */
+    touch-action: none !important; 
+    
+    /* PREVENTS accidental text selection or ghosting */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+
+    border: none;
+    display: none; 
+    max-width: 100%;
+    cursor: default; 
+}
         
         .btn-group {
             display: flex;
