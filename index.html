@@ -675,77 +675,75 @@ function loadImage(file) {
 }
         
         function parseAndFillData(text, mode) {
-            // Early validation
-            if (!text || text.trim().length < 10) {
-                showStatus('Text too short to parse - manual entry required', 'error');
-                return;
+    // Early validation
+    if (!text || text.trim().length < 10) {
+        showStatus('Text too short to parse - manual entry required', 'error');
+        return;
+    }
+    
+    const cleanText = text.replace(/[^\x00-\x7F]/g, ' ');
+    const lines = cleanText.split('\n').map(l => l.trim()).filter(l => l);
+    
+    if (mode === 'identity') {
+        const filteredIdentityLines = lines.filter(l => 
+            !l.match(/\b(father|mother|spouse|husband|wife|guardian|parent|son|daughter)\b/i) &&
+            !l.match(/\/O/i) &&
+            !l.match(/\d{4}\s?\d{4}\s?\d{4}/) &&
+            !l.includes('Government') && 
+            !l.includes('India')
+        );
+        
+        // ---- DOB extraction: FULL DATE ONLY ----
+        let dob = '';
+
+        // DD/MM/YYYY or DD-MM-YYYY
+        let m = cleanText.match(/\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/);
+        if (m) {
+            dob = `${m[3]}-${m[2]}-${m[1]}`;
+        }
+
+        // YYYY/MM/DD or YYYY-MM-DD
+        if (!dob) {
+            m = cleanText.match(/\b(\d{4})[\/\-](\d{2})[\/\-](\d{2})\b/);
+            if (m) {
+                dob = `${m[1]}-${m[2]}-${m[3]}`;
             }
-            
-            const cleanText = text.replace(/[^\x00-\x7F]/g, ' ');
-            const lines = cleanText.split('\n').map(l => l.trim()).filter(l => l);
-            
-            if (mode === 'identity') {
-                const filteredIdentityLines = lines.filter(l => 
-                    !l.match(/\b(father|mother|spouse|husband|wife|guardian|parent|son|daughter)\b/i) &&
-                    !l.match(/\/O/i) &&
-                    !l.match(/\d{4}\s?\d{4}\s?\d{4}/) &&
-                    !l.includes('Government') && 
-                    !l.includes('India')
-                );
-                
-                // ---- DOB extraction: FULL DATE ONLY ----
-                let dob = '';
+        }
 
-                // DD/MM/YYYY or DD-MM-YYYY
-                let m = cleanText.match(/\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/);
-                if (m) {
-                    dob = `${m[3]}-${m[2]}-${m[1]}`;
-                }
+        // YYYYMMDD (no separators)
+        if (!dob) {
+            m = cleanText.match(/\b(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/);
+            if (m) {
+                dob = `${m[0].slice(0,4)}-${m[0].slice(4,6)}-${m[0].slice(6,8)}`;
+            }
+        }
 
-                // YYYY/MM/DD or YYYY-MM-DD
-                if (!dob) {
-                    m = cleanText.match(/\b(\d{4})[\/\-](\d{2})[\/\-](\d{2})\b/);
-                    if (m) {
-                        dob = `${m[1]}-${m[2]}-${m[3]}`;
-                    }
-                }
+        // Set DOB only if full date detected
+        if (dob) {
+            document.getElementById('dob').value = dob;
+        }
+        
+        // Extract Gender
+        const genderMatch = cleanText.match(/\b(Male|Female|MALE|FEMALE)\b/i);
+        if (genderMatch) {
+            const gender = genderMatch[1].toLowerCase();
+            document.getElementById('gender').value = gender.charAt(0).toUpperCase() + gender.slice(1);
+        }
+        
+        // Extract Name
+        const nameLine = filteredIdentityLines.find(l => 
+            l.length > 3 && 
+            /^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/.test(l) &&
+            !l.match(/\d/)
+        );
 
-                // YYYYMMDD (no separators)
-                if (!dob) {
-                    m = cleanText.match(/\b(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/);
-                    if (m) {
-                        dob = `${m[0].slice(0,4)}-${m[0].slice(4,6)}-${m[0].slice(6,8)}`;
-                    }
-                }
-
-                // Set DOB only if full date detected
-                if (dob) {
-                    document.getElementById('dob').value = dob;
-                }
-                
-                // Extract Gender
-                const genderMatch = cleanText.match(/\b(Male|Female|MALE|FEMALE)\b/i);
-                if (genderMatch) {
-                    const gender = genderMatch[1].toLowerCase();
-                    document.getElementById('gender').value = gender.charAt(0).toUpperCase() + gender.slice(1);
-                }
-                
-                // Extract Name
-const nameLine = filteredIdentityLines.find(l => 
-    l.length > 3 && 
-    /^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/.test(l) &&
-    !l.match(/\d/)
-);
-
-if (nameLine) {
-    document.getElementById('name').value = nameLine;
+        if (nameLine) {
+            document.getElementById('name').value = nameLine;
+        }
+    } else if (mode === 'address') {
+        fillAddressFields(text);
+    }
 }
-}  // <-- closes: if (mode === 'identity')
-
-else if (mode === 'address') {
-    fillAddressFields(text);
-}
-}  // <-- closes: function parseAndFillData
 
 /* ================= ADDRESS RULE ENGINE (REFINED) ================= */
 
@@ -762,12 +760,6 @@ const NEGATIVE = {
     ADDRESS_HDR: /\b(address|to)\b\s*[:\-]?/i,
     ADMIN: /\b(district|dist\.?|taluk|taluka|tq\.?|tehsil|state|pin\s*code|kerala|india)\b/i
 };
-
-/* ================= REPLACED ADDRESS ENGINE ================= */
-
-/* ================= THRESHOLD-BASED ADDRESS ENGINE ================= */
-
-/* ================= CSV-KING ADAPTIVE ENGINE ================= */
 
 function fillAddressFields(ocrText) {
     const personName = document.getElementById('name')?.value || '';
@@ -801,13 +793,10 @@ function fillAddressFields(ocrText) {
 
     if (commaCount >= 4) {
         // --- CSV KING MODE ---
-        // Newlines are treated as spaces; only commas separate segments.
-        // This keeps "Marine Drive" together even if OCR splits the lines.
         segments = cleanText.split(',')
             .map(seg => seg.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim());
     } else {
         // --- LINE FALLBACK MODE ---
-        // Used only when CSV formatting is absent.
         segments = cleanText.split('\n')
             .map(seg => seg.trim());
     }
@@ -816,21 +805,15 @@ function fillAddressFields(ocrText) {
     segments = segments.filter(seg => {
         const s = seg.toLowerCase();
         
-        // DISCARD the entire CSV unit if it contains Guardian markers (C/O, S/O, etc.)
         if (NEGATIVE.RELATION.test(seg)) return false;
-
-        // DISCARD administrative units (Kerala, District names, etc.)
         if (NEGATIVE.ADMIN.test(seg)) return false;
-
-        // DISCARD units matching the cardholder's name
         if (personName && s.includes(personName.toLowerCase())) return false;
 
-        return s.length > 2; // Only keep meaningful units
+        return s.length > 2;
     });
 
     // 5. TOWN FALLBACK (If Outside Kerala/JSON)
     if (!town) {
-        // CSV-King logic: Town is usually the last valid segment before PIN/District
         const poSegment = segments.find(s => POSITIVE.PO.test(s));
         if (poSegment) {
             const m = poSegment.match(POSITIVE.PO);
@@ -846,32 +829,25 @@ function fillAddressFields(ocrText) {
     let house = '';
     let road = '';
 
-    // A. Priority: Keyword-based locking
     const houseFound = addressSegments.find(s => POSITIVE.HOUSE.test(s));
     const roadFound = addressSegments.find(s => POSITIVE.ROAD.test(s));
 
     if (houseFound) house = houseFound;
     if (roadFound) road = roadFound;
 
-    // B. Positional Fallback (Sequential CSV Logic)
     if (!house && addressSegments.length > 0) {
         house = addressSegments[0];
     }
     
     if (!road) {
-        // If segment 0 was house, road is next. Otherwise, road is segment 0.
         road = (addressSegments[0] === house) ? (addressSegments[1] || '') : (addressSegments[0] || '');
     }
 
-    // Final UI Assignment
     document.getElementById('house').value = house;
     document.getElementById('road').value = road;
 
-    // 7. FORMATTING
-    // Preserves your existing sentence case function as it is.
     applySentenceCase();
 }
-
 /* ================= END REPLACEMENT ================= */
 
 function applySentenceCase() {
@@ -883,7 +859,6 @@ function applySentenceCase() {
     });
 }
 
-        
         function showStatus(message, type) {
             status.textContent = message;
             status.className = 'status ' + type;
