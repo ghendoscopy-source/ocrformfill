@@ -391,7 +391,9 @@
 
     <script src="kerala-pincode.js"></script>
     <script>
-        /* --- STEP 2: VARIABLE MEMORY (CLEAN VERSION) --- */
+        
+        
+/* --- STEP 2: VARIABLE MEMORY (CLEAN VERSION) --- */
 let img = new Image();
 let canvas = document.getElementById('selectionCanvas');
 let ctx = canvas.getContext('2d');
@@ -413,54 +415,53 @@ let initialDistance = 0;
 
 // Box Coordinates
 let startX = 0, startY = 0, endX = 0, endY = 0;
-        
-        const cameraInput = document.getElementById('cameraInput');
-        const fileInput = document.getElementById('fileInput');
-        const capturePhotoBtn = document.getElementById('capturePhotoBtn');
-        const uploadFileBtn = document.getElementById('uploadFileBtn');
-        const selectIdentityBtn = document.getElementById('selectIdentityBtn');
-        const selectAddressBtn = document.getElementById('selectAddressBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const zoomResetBtn = document.getElementById('zoomResetBtn');
-        const progressBar = document.getElementById('progressBar');
-        const progressFill = document.getElementById('progressFill');
-        const status = document.getElementById('status');
 
-        // Save form URL to localStorage on change
-        const formUrlInput = document.getElementById('formUrl');
-        formUrlInput.addEventListener('input', () => {
-            const url = formUrlInput.value.trim();
-            if (url) {
-                localStorage.setItem('savedFormUrl', url);
-            } else {
-                localStorage.removeItem('savedFormUrl');
-            }
-        });
-        capturePhotoBtn.addEventListener('click', () => cameraInput.click());
-        uploadFileBtn.addEventListener('click', () => fileInput.click());
-        
-        cameraInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                loadImage(file);
-            }
-        });
-        
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                loadImage(file);
-            }
-        });
-        
+const cameraInput = document.getElementById('cameraInput');
+const fileInput = document.getElementById('fileInput');
+const capturePhotoBtn = document.getElementById('capturePhotoBtn');
+const uploadFileBtn = document.getElementById('uploadFileBtn');
+const selectIdentityBtn = document.getElementById('selectIdentityBtn');
+const selectAddressBtn = document.getElementById('selectAddressBtn');
+const resetBtn = document.getElementById('resetBtn');
+const zoomResetBtn = document.getElementById('zoomResetBtn');
+const progressBar = document.getElementById('progressBar');
+const progressFill = document.getElementById('progressFill');
+const status = document.getElementById('status');
+
+// Save form URL to localStorage on change
+const formUrlInput = document.getElementById('formUrl');
+formUrlInput.addEventListener('input', () => {
+    const url = formUrlInput.value.trim();
+    if (url) {
+        localStorage.setItem('savedFormUrl', url);
+    } else {
+        localStorage.removeItem('savedFormUrl');
+    }
+});
+
+capturePhotoBtn.addEventListener('click', () => cameraInput.click());
+uploadFileBtn.addEventListener('click', () => fileInput.click());
+
+cameraInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        loadImage(file);
+    }
+});
+
+fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        loadImage(file);
+    }
+});
 
 /* ================= IMAGE LOADING & UI RESET ================= */
 function loadImage(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
-        img.src = e.target.result;
+        img = new Image();
         img.onload = () => {
-            // Set canvas to actual image size
             canvas.width = img.width;
             canvas.height = img.height;
             ctx.drawImage(img, 0, 0);
@@ -476,90 +477,52 @@ function loadImage(file) {
             canvas.style.height = (img.height * fitScale) + 'px';
             canvas.style.display = 'block';
             
-            /* --- IMAGE LOAD SUCCESS --- */
-img.onload = () => {
-    canvas.width = img.width;
-    canvas.height = img.height;
-    ctx.drawImage(img, 0, 0);
-    canvas.style.display = 'block';
+            // HARD RESET: Unlock the movement logic for the new image
+            selectionMode = null;
+            isSelecting = false;
+            isPanning = false;
 
-    // 1. HARD RESET: Unlock the movement logic for the new image
-    selectionMode = null;
-    isSelecting = false;
-    isPanning = false;
+            // COORDINATE RESET: Center and reset zoom
+            currentScale = 1;
+            translateX = 0;
+            translateY = 0;
+            updateTransform();
 
-    // 2. COORDINATE RESET: Center and reset zoom
-    currentScale = 1;
-    translateX = 0;
-    translateY = 0;
-    updateTransform(); // Physically move the wrapper back to 0,0
+            // UI RESET
+            selectIdentityBtn.disabled = false;
+            selectAddressBtn.disabled = false;
+            resetBtn.disabled = false;
 
-    // 3. UI RESET
-    selectIdentityBtn.disabled = false;
-    selectAddressBtn.disabled = false;
-    resetBtn.disabled = false;
-    // zoomResetBtn.style.display = 'inline-block'; // Only if you have this button
+            showStatus('New Image Loaded! Movement Unlocked. Drag to move, pinch to zoom.', 'success');
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
 
-    showStatus('New Image Loaded! Movement Unlocked. Drag to move, pinch to zoom.', 'success');
-};
-/* --- 1. MOVES THE IMAGE --- */
+/* ================= 1. MOVES THE IMAGE ================= */
 function updateTransform() {
-    // This physically slides and zooms the image wrapper
-    canvasWrapper.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
-}
-
-/* --- 2. DRAWS THE BOX --- */
-function drawSelection() {
-    // Redraw the original image first to clear old boxes
-    ctx.drawImage(img, 0, 0);
-    
-    // Choose color based on mode
-    ctx.strokeStyle = (selectionMode === 'identity') ? '#007bff' : '#28a745';
-    
-    // CRITICAL: Make the line thickness look consistent even when zoomed in
-    ctx.lineWidth = 2 / currentScale; 
-    
-    ctx.strokeRect(startX, startY, endX - startX, endY - startY);
-    
-    // Add a light fill so the user can see the area clearly
-    ctx.fillStyle = (selectionMode === 'identity') ? 'rgba(0,123,255,0.1)' : 'rgba(40,167,69,0.1)';
-    ctx.fillRect(startX, startY, endX - startX, endY - startY);
-}
-
-/* --- 3. PROCESSES THE RESULT --- */
-async function handleSelectionEnd() {
-    const x = Math.min(startX, endX);
-    const y = Math.min(startY, endY);
-    const w = Math.abs(endX - startX);
-    const h = Math.abs(endY - startY);
-    
-    // Only trigger OCR if the box is big enough to be real
-    if (w > 5 && h > 5) {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = w;
-        tempCanvas.height = h;
-        const tempCtx = tempCanvas.getContext('2d');
-        
-        // Draw only the cropped part into the temporary canvas
-        tempCtx.drawImage(img, x, y, w, h, 0, 0, w, h);
-        
-        // Call your existing OCR function
-        await performOCR(tempCanvas, selectionMode);
-        
-        // Auto-unlock the canvas after selection is done
-        selectionMode = null;
-        showStatus('Selection captured. Canvas unlocked.', 'success');
-    }
-}
-
-/* ================= MOTION, SELECTION & BUTTONS ================= */
-
-function updateTransform() {
-    if (canvasWrapper) {
+    if (typeof canvasWrapper !== 'undefined' && canvasWrapper) {
         canvasWrapper.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
     }
 }
 
+/* ================= 2. COORDINATE HELPER ================= */
+function getCanvasCoords(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY,
+        rawX: clientX,
+        rawY: clientY
+    };
+}
+
+/* ================= 3. DRAWS THE BOX ================= */
 function drawSelection() {
     ctx.drawImage(img, 0, 0);
     ctx.strokeStyle = (selectionMode === 'identity') ? '#007bff' : '#28a745';
@@ -569,6 +532,7 @@ function drawSelection() {
     ctx.fillRect(startX, startY, endX - startX, endY - startY);
 }
 
+/* ================= 4. PROCESSES THE RESULT ================= */
 async function handleSelectionEnd() {
     const x = Math.min(startX, endX);
     const y = Math.min(startY, endY);
@@ -583,85 +547,96 @@ async function handleSelectionEnd() {
         tempCtx.drawImage(img, x, y, w, h, 0, 0, w, h);
         
         const modeUsed = selectionMode;
-        selectionMode = null; 
+        selectionMode = null; // Unlock canvas immediately
         canvas.style.cursor = 'default';
         await performOCR(tempCanvas, modeUsed);
     }
 }
 
-/* --- TOUCH EVENTS --- */
-canvas.addEventListener('touchstart', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+/* ================= 5. UNIFIED EVENT LISTENERS ================= */
+const startHandler = (e) => {
     if (selectionMode) {
         isSelecting = true;
-        const touch = e.touches[0];
-        startX = (touch.clientX - rect.left) * scaleX;
-        startY = (touch.clientY - rect.top) * scaleY;
+        const coords = getCanvasCoords(e);
+        startX = coords.x;
+        startY = coords.y;
     } else {
-        if (e.touches.length === 2) {
+        if (e.touches && e.touches.length === 2) {
             initialDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         } else {
-            lastTouchX = e.touches[0].clientX;
-            lastTouchY = e.touches[0].clientY;
+            isPanning = true;
+            const coords = getCanvasCoords(e);
+            lastTouchX = coords.rawX;
+            lastTouchY = coords.rawY;
         }
     }
-    e.preventDefault();
-}, {passive: false});
+    if (e.cancelable) e.preventDefault();
+};
 
-canvas.addEventListener('touchmove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+const moveHandler = (e) => {
     if (selectionMode && isSelecting) {
-        const touch = e.touches[0];
-        endX = (touch.clientX - rect.left) * scaleX;
-        endY = (touch.clientY - rect.top) * scaleY;
+        const coords = getCanvasCoords(e);
+        endX = coords.x;
+        endY = coords.y;
         drawSelection();
-    } else if (!selectionMode) {
-        if (e.touches.length === 2) {
+    } else if (isPanning && !selectionMode) {
+        if (e.touches && e.touches.length === 2) {
             const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
             currentScale = Math.max(1, Math.min(5, currentScale * (dist / initialDistance)));
             initialDistance = dist;
         } else {
-            translateX += e.touches[0].clientX - lastTouchX;
-            translateY += e.touches[0].clientY - lastTouchY;
-            lastTouchX = e.touches[0].clientX;
-            lastTouchY = e.touches[0].clientY;
+            const coords = getCanvasCoords(e);
+            translateX += coords.rawX - lastTouchX;
+            translateY += coords.rawY - lastTouchY;
+            lastTouchX = coords.rawX;
+            lastTouchY = coords.rawY;
         }
         updateTransform();
     }
-    e.preventDefault();
-}, {passive: false});
+    if (e.cancelable) e.preventDefault();
+};
 
-canvas.addEventListener('touchend', () => {
+const endHandler = () => {
     if (isSelecting) handleSelectionEnd();
     isSelecting = false;
-});
+    isPanning = false;
+};
 
-/* --- BUTTON CONNECTORS --- */
+canvas.addEventListener('mousedown', startHandler);
+window.addEventListener('mousemove', moveHandler);
+window.addEventListener('mouseup', endHandler);
+
+canvas.addEventListener('touchstart', startHandler, {passive: false});
+canvas.addEventListener('touchmove', moveHandler, {passive: false});
+canvas.addEventListener('touchend', endHandler);
+
+/* ================= 6. THE BUTTONS ================= */
 selectIdentityBtn.addEventListener('click', () => {
     selectionMode = 'identity';
     canvas.style.cursor = 'crosshair';
-    showStatus('CANVAS LOCKED: Select Identity', 'info');
+    showStatus('CANVAS LOCKED: Drag to select Name/DOB', 'info');
 });
 
 selectAddressBtn.addEventListener('click', () => {
     selectionMode = 'address';
     canvas.style.cursor = 'crosshair';
-    showStatus('CANVAS LOCKED: Select Address', 'info');
+    showStatus('CANVAS LOCKED: Drag to select Address', 'info');
 });
 
 resetBtn.addEventListener('click', () => {
     selectionMode = null;
-    currentScale = 1; translateX = 0; translateY = 0;
+    isSelecting = false;
+    isPanning = false;
+    currentScale = 1;
+    translateX = 0;
+    translateY = 0;
     updateTransform();
     ctx.drawImage(img, 0, 0);
-    showStatus('Reset Successful', 'info');
+    canvas.style.cursor = 'default';
+    showStatus('Canvas Reset', 'info');
 });
 
-/* --- OCR STARTER --- */
+/* ================= 7. OCR FUNCTION ================= */
 async function performOCR(canvasSource, mode) {
     progressBar.style.display = 'block';
     showStatus('Scanning...', 'info');
@@ -669,14 +644,14 @@ async function performOCR(canvasSource, mode) {
         const worker = await Tesseract.createWorker('eng');
         const { data: { text } } = await worker.recognize(canvasSource);
         await worker.terminate();
-        // This line sends the text to your 500 lines of data logic below
         parseAndFillData(text, mode); 
     } catch (err) {
-        showStatus('Error: ' + err.message, 'error');
+        showStatus('OCR Failed: ' + err.message, 'error');
     }
     progressBar.style.display = 'none';
 }
 
+        
 /* --- IMAGE LOADER --- */
 function loadImage(file) {
     const reader = new FileReader();
