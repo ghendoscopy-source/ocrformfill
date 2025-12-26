@@ -763,7 +763,8 @@ const NEGATIVE = {
 
 function fillAddressFields(ocrText) {
     const personName = document.getElementById('name')?.value || '';
-    
+    ocrText = ocrText.replace(/[^a-zA-Z0-9\s,.\-\/#]/g, '').replace(/\s\s+/g, ' ').trim();
+   
     // 1. PIN & MOBILE (Locked First)
     const pinMatch = ocrText.match(POSITIVE.PIN);
     const pincode = pinMatch ? pinMatch[0] : '';
