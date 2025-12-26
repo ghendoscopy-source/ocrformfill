@@ -492,38 +492,53 @@ function loadImage(file) {
     reader.readAsDataURL(file);
 }
 
-/* ================= HELPER FUNCTIONS ================= */
-
-// Updates the visual position and zoom
+/* --- 1. MOVES THE IMAGE --- */
 function updateTransform() {
+    // This physically slides and zooms the image wrapper
     canvasWrapper.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
 }
 
-// Draws the selection box accurately regardless of zoom level
+/* --- 2. DRAWS THE BOX --- */
 function drawSelection() {
+    // Redraw the original image first to clear old boxes
     ctx.drawImage(img, 0, 0);
-    ctx.strokeStyle = selectionMode === 'identity' ? '#667eea' : '#28a745';
-    // Fix: Line thickness scales down so it doesn't look "huge" when zoomed
-    ctx.lineWidth = 3 / currentScale; 
+    
+    // Choose color based on mode
+    ctx.strokeStyle = (selectionMode === 'identity') ? '#007bff' : '#28a745';
+    
+    // CRITICAL: Make the line thickness look consistent even when zoomed in
+    ctx.lineWidth = 2 / currentScale; 
+    
     ctx.strokeRect(startX, startY, endX - startX, endY - startY);
-    ctx.fillStyle = selectionMode === 'identity' ? 'rgba(102,126,234,0.1)' : 'rgba(40,167,69,0.1)';
+    
+    // Add a light fill so the user can see the area clearly
+    ctx.fillStyle = (selectionMode === 'identity') ? 'rgba(0,123,255,0.1)' : 'rgba(40,167,69,0.1)';
     ctx.fillRect(startX, startY, endX - startX, endY - startY);
 }
 
-// Handles the final crop and OCR trigger
+/* --- 3. PROCESSES THE RESULT --- */
 async function handleSelectionEnd() {
     const x = Math.min(startX, endX);
     const y = Math.min(startY, endY);
     const w = Math.abs(endX - startX);
     const h = Math.abs(endY - startY);
     
-    if (w > 10 && h > 10) {
+    // Only trigger OCR if the box is big enough to be real
+    if (w > 5 && h > 5) {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = w;
         tempCanvas.height = h;
         const tempCtx = tempCanvas.getContext('2d');
+        
+        // Draw only the cropped part into the temporary canvas
         tempCtx.drawImage(img, x, y, w, h, 0, 0, w, h);
+        
+        // Call your existing OCR function
         await performOCR(tempCanvas, selectionMode);
+        
+        // Auto-unlock the canvas after selection is done
+        selectionMode = null;
+        showStatus('Selection captured. Canvas unlocked.', 'success');
     }
 }
 
