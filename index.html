@@ -767,6 +767,8 @@ const NEGATIVE = {
 
 /* ================= THRESHOLD-BASED ADDRESS ENGINE ================= */
 
+/* ================= CSV-KING ADAPTIVE ENGINE ================= */
+
 function fillAddressFields(ocrText) {
     const personName = document.getElementById('name')?.value || '';
     
@@ -787,80 +789,86 @@ function fillAddressFields(ocrText) {
         town = KERALA_PINCODES[pincode].town;
     }
 
-    // 3. ADAPTIVE SEGMENTATION (Strict 4-Comma Threshold)
+    // 3. SEGMENTATION (CSV-King Threshold)
     let segments = [];
     let cleanText = ocrText
-        .replace(new RegExp(`To|Address|Address:|${personName}`, 'gi'), '')
+        .replace(new RegExp(`To|Address|Address:`, 'gi'), '')
         .replace(pincode, '')
         .replace(mobile, '')
         .trim();
 
-    // The logic: 4+ commas = Database/CSV Style. < 4 = Multi-line label style.
     const commaCount = (cleanText.match(/,/g) || []).length;
 
     if (commaCount >= 4) {
-        // --- CSV MODE ---
-        // Newlines are ignored; only commas split the values.
+        // --- CSV KING MODE ---
+        // Newlines are treated as spaces; only commas separate segments.
+        // This keeps "Marine Drive" together even if OCR splits the lines.
         segments = cleanText.split(',')
             .map(seg => seg.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim());
     } else {
-        // --- LINE MODE ---
-        // Commas are treated as text; newlines split the values.
+        // --- LINE FALLBACK MODE ---
+        // Used only when CSV formatting is absent.
         segments = cleanText.split('\n')
             .map(seg => seg.trim());
     }
 
-    // Filter out empty entries and Administrative noise (States, etc.)
-    segments = segments.filter(seg => seg.length > 1 && !NEGATIVE.ADMIN.test(seg));
-
-    // 4. GUARDIAN / RELATION CLEANUP (First Segment Protection)
-    if (segments.length > 0) {
-        // Chop off "C/O [Name]" without using internal punctuation as a separator
-        segments[0] = segments[0]
-            .replace(/^.*?\b(c\/o|s\/o|d\/o|w\/o|h\/o)\b.*?(?=[A-Za-z0-9]|$)/i, '')
-            .replace(/^[:\/\s\-\?;]+/, '') // Scrub punctuation left at the start
-            .trim();
+    // 4. THE UNIT DISCARDER (Strict Unit Filtering)
+    segments = segments.filter(seg => {
+        const s = seg.toLowerCase();
         
-        if (segments[0].length < 2) segments.shift();
-    }
+        // DISCARD the entire CSV unit if it contains Guardian markers (C/O, S/O, etc.)
+        if (NEGATIVE.RELATION.test(seg)) return false;
 
-    // 5. TOWN FALLBACK (If Outside Kerala)
+        // DISCARD administrative units (Kerala, District names, etc.)
+        if (NEGATIVE.ADMIN.test(seg)) return false;
+
+        // DISCARD units matching the cardholder's name
+        if (personName && s.includes(personName.toLowerCase())) return false;
+
+        return s.length > 2; // Only keep meaningful units
+    });
+
+    // 5. TOWN FALLBACK (If Outside Kerala/JSON)
     if (!town) {
+        // CSV-King logic: Town is usually the last valid segment before PIN/District
         const poSegment = segments.find(s => POSITIVE.PO.test(s));
         if (poSegment) {
             const m = poSegment.match(POSITIVE.PO);
             town = m ? m[1].trim() : poSegment;
         } else if (segments.length > 0) {
-            // Standard Aadhaar: Town is the last segment before District/PIN
-            town = segments[segments.length - 1]; 
+            town = segments[segments.length - 1];
         }
     }
     document.getElementById('town').value = town || '';
 
-    // 6. HOUSE & ROAD (Subtract Town from remaining segments)
+    // 6. HOUSE & ROAD ASSIGNMENT
     const addressSegments = segments.filter(s => s !== town);
     let house = '';
     let road = '';
 
-    // A. Priority: Positive Identifier Keywords
+    // A. Priority: Keyword-based locking
     const houseFound = addressSegments.find(s => POSITIVE.HOUSE.test(s));
     const roadFound = addressSegments.find(s => POSITIVE.ROAD.test(s));
 
     if (houseFound) house = houseFound;
     if (roadFound) road = roadFound;
 
-    // B. Priority: Positional Fallback
-    if (!house && addressSegments.length > 0) house = addressSegments[0];
+    // B. Positional Fallback (Sequential CSV Logic)
+    if (!house && addressSegments.length > 0) {
+        house = addressSegments[0];
+    }
+    
     if (!road) {
+        // If segment 0 was house, road is next. Otherwise, road is segment 0.
         road = (addressSegments[0] === house) ? (addressSegments[1] || '') : (addressSegments[0] || '');
     }
 
-    // Assign to UI
+    // Final UI Assignment
     document.getElementById('house').value = house;
     document.getElementById('road').value = road;
 
     // 7. FORMATTING
-    // Your existing applySentenceCase() function is preserved and called here.
+    // Preserves your existing sentence case function as it is.
     applySentenceCase();
 }
 
