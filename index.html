@@ -994,6 +994,14 @@ function applySentenceCase() {
             showStatus('Opening blank form for manual entry...', 'info');
         });
     
+        // Restore saved form URL on page load
+          window.addEventListener('DOMContentLoaded', () => {
+          const savedUrl = localStorage.getItem('savedFormUrl');
+          if (savedUrl) {
+         document.getElementById('formUrl').value = savedUrl;
+         showStatus('Restored your saved form link', 'success');
+    }
+});
 </script>
 </body>
 </html>
